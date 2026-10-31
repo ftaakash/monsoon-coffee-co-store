@@ -40,7 +40,7 @@ export default function SecurityForm({ hasPassword }: { hasPassword: boolean }) 
       setCodeSent(true)
       setMsg({
         ok: true,
-        text: `We sent a 6-digit code to ${r.emailMasked ?? "your email"}.`,
+        text: `Demo mode: no email is sent to ${r.emailMasked ?? "you"}. Use code 123456.`,
       })
     })
   }

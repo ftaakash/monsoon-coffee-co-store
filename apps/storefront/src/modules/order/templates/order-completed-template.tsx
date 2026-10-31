@@ -1,8 +1,5 @@
-import { cookies as nextCookies } from "next/headers"
-
 import Help from "@modules/order/components/help"
 import Items from "@modules/order/components/items"
-import OnboardingCta from "@modules/order/components/onboarding-cta"
 import OrderDetails from "@modules/order/components/order-details"
 import OrderSummary from "@modules/order/components/order-summary"
 import ShippingDetails from "@modules/order/components/shipping-details"
@@ -16,15 +13,9 @@ type OrderCompletedTemplateProps = {
 export default async function OrderCompletedTemplate({
   order,
 }: OrderCompletedTemplateProps) {
-  const cookies = await nextCookies()
-
-  const isOnboarding = cookies.get("_medusa_onboarding")?.value === "true"
-
   return (
     <main className="min-h-[calc(100vh-64px)] bg-surface px-6 pb-24 pt-14 sm:px-8 lg:px-10 xl:px-12">
       <div className="mx-auto w-full max-w-5xl">
-        {isOnboarding && <OnboardingCta orderId={order.id} />}
-
         <section
           className="border-b-2 border-ink pb-8 sm:pb-10"
           data-testid="order-complete-container"

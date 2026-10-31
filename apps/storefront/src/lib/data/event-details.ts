@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@lib/config"
+import { EVENT_DETAILS } from "@lib/mock/catalog"
 
 export type EventDetail = {
   id: string
@@ -22,16 +22,5 @@ export type EventDetail = {
 export async function getProductEventDetail(
   productId: string
 ): Promise<EventDetail | null> {
-  try {
-    const res = await sdk.client.fetch<{ event_detail: EventDetail | null }>(
-      `/store/products/${productId}/event-detail`,
-      {
-        method: "GET",
-        next: { tags: [`product-${productId}`, "products"] },
-      }
-    )
-    return res?.event_detail ?? null
-  } catch {
-    return null
-  }
+  return EVENT_DETAILS[productId] ?? null
 }

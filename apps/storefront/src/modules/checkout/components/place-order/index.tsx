@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { HttpTypes } from "@medusajs/types"
 
-import RazorpayButton from "@modules/checkout/components/razorpay-button"
+import DemoPaymentButton from "@modules/checkout/components/demo-payment-button"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 
 type Props = {
@@ -14,8 +14,8 @@ type Props = {
 
 /**
  * Final checkout step: an explicit terms agreement the customer must tick
- * before paying. Razorpay is the only payment method, so this always renders
- * the Razorpay pay button.
+ * before paying. This build has no payment gateway, so the button places the
+ * order straight away without charging anything.
  */
 export default function PlaceOrder({ cart, countryCode, totalLabel }: Props) {
   const [agreed, setAgreed] = useState(false)
@@ -51,17 +51,17 @@ export default function PlaceOrder({ cart, countryCode, totalLabel }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <p className="font-family-base text-sm text-ink/65">
-        You&apos;ll complete payment in Razorpay&apos;s secure checkout window.
+        Demo checkout: no payment gateway is connected and nothing will be charged.
       </p>
       {agreement}
-      <RazorpayButton
+      <DemoPaymentButton
         cart={cart}
         countryCode={countryCode}
         disabled={!agreed}
         className="w-full border-2 border-ink bg-ink px-4 py-3 font-family-heading text-sm font-bold uppercase tracking-[0.12em] text-surface hover:bg-surface hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:py-4 sm:text-base sm:tracking-[0.16em] lg:text-lg"
       >
-        {`Pay with Razorpay — ${totalLabel}`}
-      </RazorpayButton>
+        {`Place order — ${totalLabel}`}
+      </DemoPaymentButton>
     </div>
   )
 }

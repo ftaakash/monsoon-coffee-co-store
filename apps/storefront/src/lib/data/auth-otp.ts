@@ -1,9 +1,7 @@
 "use server"
 
-import { revalidateTag } from "next/cache"
-
-import { sdk } from "@lib/config"
-import { getCacheTag, setAuthToken } from "./cookies"
+import { mockAuth } from "@lib/mock/db"
+import { setAuthToken } from "./cookies"
 import { transferCart } from "./customer"
 
 export type SendLoginOtpResult = {
@@ -13,18 +11,14 @@ export type SendLoginOtpResult = {
 }
 export type VerifyLoginOtpResult = { ok: boolean; error?: string }
 
-// Email a login code to an existing account. The publishable key is attached by
-// the SDK config automatically.
+// "Email" a login code to an existing account. In this demo build no email is
+// sent — the code is always DEMO_OTP (123456).
 export async function sendLoginOtp(email: string): Promise<SendLoginOtpResult> {
   const trimmed = (email ?? "").trim()
   if (!trimmed) return { ok: false, error: "Enter your email." }
 
   try {
-    const res = await sdk.client.fetch<{ ok: boolean; email_masked?: string }>(
-      "/store/auth-otp/send",
-      { method: "POST", body: { email: trimmed } }
-    )
-    return { ok: true, emailMasked: res?.email_masked }
+    return { ok: true, emailMasked: mockAuth.sendOtp(trimmed) }
   } catch (e: any) {
     return {
       ok: false,
@@ -33,9 +27,8 @@ export async function sendLoginOtp(email: string): Promise<SendLoginOtpResult> {
   }
 }
 
-// Verify a login code. On success the backend returns a customer session token,
-// which we store exactly like the password login does — then the shopper is
-// authenticated and their guest cart is transferred to the account.
+// Verify a login code, then sign the shopper in and move their guest cart onto
+// the account — exactly like the password login does.
 export async function verifyLoginOtp(
   email: string,
   code: string
@@ -43,17 +36,7 @@ export async function verifyLoginOtp(
   const trimmed = (email ?? "").trim()
 
   try {
-    const res = await sdk.client.fetch<{ token: string }>(
-      "/store/auth-otp/verify",
-      { method: "POST", body: { email: trimmed, code } }
-    )
-    if (!res?.token) {
-      return { ok: false, error: "Could not sign you in. Please try again." }
-    }
-
-    await setAuthToken(res.token)
-    const customerCacheTag = await getCacheTag("customers")
-    revalidateTag(customerCacheTag)
+    await setAuthToken(mockAuth.verifyOtp(trimmed, code))
 
     try {
       await transferCart()

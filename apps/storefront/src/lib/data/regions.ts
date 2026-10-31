@@ -1,61 +1,19 @@
 "use server"
 
-import { sdk } from "@lib/config"
 import { HttpTypes } from "@medusajs/types"
-import { withCache } from "@lib/redis/with-cache"
-import { getCacheOptions } from "./cookies"
+import { REGIONS } from "@lib/mock/catalog"
 
-const REGION_TTL = 60 * 30
+export const listRegions = async (): Promise<HttpTypes.StoreRegion[]> => REGIONS
 
-export const listRegions = async () =>
-  withCache(
-    ["regions", "list"],
-    async () => {
-      const next = { ...(await getCacheOptions("regions")) }
-      return sdk.client
-        .fetch<{ regions: HttpTypes.StoreRegion[] }>(`/store/regions`, {
-          method: "GET",
-          next,
-          cache: "force-cache",
-        })
-        .then(({ regions }) => regions)
-    },
-    { ttlSeconds: REGION_TTL }
-  )
-
-export const retrieveRegion = async (id: string) =>
-  withCache(
-    ["regions", "id", id],
-    async () => {
-      const next = { ...(await getCacheOptions(["regions", id].join("-"))) }
-      return sdk.client
-        .fetch<{ region: HttpTypes.StoreRegion }>(`/store/regions/${id}`, {
-          method: "GET",
-          next,
-          cache: "force-cache",
-        })
-        .then(({ region }) => region)
-    },
-    { ttlSeconds: REGION_TTL }
-  )
-
-const regionMap = new Map<string, HttpTypes.StoreRegion>()
+export const retrieveRegion = async (id: string) => {
+  const region = REGIONS.find((r) => r.id === id)
+  if (!region) throw new Error(`Region with id ${id} not found`)
+  return region
+}
 
 export const getRegion = async (countryCode: string) => {
-  if (regionMap.has(countryCode)) {
-    return regionMap.get(countryCode)
-  }
-
-  const regions = await listRegions()
-  if (!regions) {
-    return null
-  }
-
-  regions.forEach((region) => {
-    region.countries?.forEach((c) => {
-      regionMap.set(c?.iso_2 ?? "", region)
-    })
-  })
-
-  return countryCode ? regionMap.get(countryCode) : regionMap.get("in")
+  const code = (countryCode || "in").toLowerCase()
+  return (
+    REGIONS.find((r) => r.countries?.some((c) => c.iso_2 === code)) ?? null
+  )
 }

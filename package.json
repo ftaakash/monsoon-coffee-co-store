@@ -1,19 +1,15 @@
 {
   "name": "monsoon-coffee-co-store",
-  "private": false,
+  "private": true,
   "packageManager": "pnpm@11.1.2",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm -r dev",
-    "build": "pnpm -r build",
-    "start": "turbo start",
-    "lint": "turbo lint",
-    "test": "turbo test",
-    "backend:seed": "turbo seed --filter=@dtc/backend",
-    "backend:dev": "turbo dev --filter=@dtc/backend",
-    "storefront:dev": "turbo dev --filter=@dtc/storefront"
+    "dev": "npm --prefix apps/storefront run dev",
+    "build": "npm --prefix apps/storefront run build",
+    "start": "npm --prefix apps/storefront run start",
+    "lint": "npm --prefix apps/storefront run lint"
   },
   "pnpm": {
     "overrides": {
@@ -22,7 +18,6 @@
     }
   },
   "devDependencies": {
-    "turbo": "^2.0.14",
     "prettier": "^3.2.5"
   }
 }

@@ -1,22 +1,20 @@
 import "server-only"
 import { cookies as nextCookies } from "next/headers"
 
-export const getAuthHeaders = async (): Promise<
-  { authorization: string } | Record<string, never>
-> => {
+import { mockAuth } from "@lib/mock/db"
+
+export const getAuthToken = async (): Promise<string | null> => {
   try {
     const cookies = await nextCookies()
-    const token = cookies.get("_medusa_jwt")?.value
-
-    if (!token) {
-      return {}
-    }
-
-    return { authorization: `Bearer ${token}` }
+    return cookies.get("_medusa_jwt")?.value ?? null
   } catch {
-    return {}
+    return null
   }
 }
+
+// The signed-in customer's id, resolved from the session cookie.
+export const getCustomerId = async (): Promise<string | null> =>
+  mockAuth.customerIdForToken(await getAuthToken())
 
 export const getCacheTag = async (tag: string): Promise<string> => {
   try {
@@ -31,23 +29,6 @@ export const getCacheTag = async (tag: string): Promise<string> => {
   } catch {
     return ""
   }
-}
-
-export const getCacheOptions = async (
-  tag: string
-): Promise<{ tags: string[] } | Record<string, never>> => {
-  if (typeof window !== "undefined") {
-    return {}
-  }
-
-  // Always include the stable global tag so the backend's revalidation
-  // webhook (which doesn't know per-visitor cacheIds) can invalidate every
-  // visitor's cached payload by hitting the bare tag name.
-  const tags = [tag]
-  const cacheTag = await getCacheTag(tag)
-  if (cacheTag) tags.push(cacheTag)
-
-  return { tags }
 }
 
 export const setAuthToken = async (token: string) => {

@@ -7,7 +7,7 @@ export const paymentInfoMap: Record<
   { title: string; icon: React.JSX.Element }
 > = {
   pp_razorpay_razorpay: {
-    title: "Razorpay",
+    title: "Demo Payment",
     icon: <CreditCard />,
   },
   pp_system_default: {

@@ -370,14 +370,8 @@ const DigitalCard = ({
 }
 
 // Scannable QR for a ticket — rendered client-side so it works for guests and
-// logged-in buyers alike. Encodes a check-in URL (the admin Ticket Check-in page
-// with the code pre-filled) so ANY phone camera / QR app opens it directly; the
-// door scanner also accepts the bare code. Falls back to the bare code if the
-// backend URL isn't configured.
-const ticketCheckInUrl = (code: string): string => {
-  const base = (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL ?? "").replace(/\/$/, "")
-  return base ? `${base}/app/ticket-verify?code=${encodeURIComponent(code)}` : code
-}
+// logged-in buyers alike. Encodes the bare ticket code the door scanner reads.
+const ticketCheckInUrl = (code: string): string => code
 
 const TicketQr = ({ code }: { code: string }) => {
   const [src, setSrc] = useState<string | null>(null)

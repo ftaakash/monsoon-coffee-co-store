@@ -1,59 +1,28 @@
 "use server"
 
-import { sdk } from "@lib/config"
 import { HttpTypes } from "@medusajs/types"
-import { getAuthHeaders } from "./cookies"
+import { SHIPPING_OPTIONS } from "@lib/mock/catalog"
+import { mockCart } from "@lib/mock/db"
 
-export const listCartShippingMethods = async (cartId: string) => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
+// Only the options whose shipping profile is needed by an item in the cart.
+export const listCartShippingMethods = async (
+  cartId: string
+): Promise<HttpTypes.StoreCartShippingOption[] | null> => {
+  const cart = mockCart.retrieve(cartId)
+  if (!cart) return null
 
-  return sdk.client
-    .fetch<HttpTypes.StoreShippingOptionListResponse>(
-      `/store/shipping-options`,
-      {
-        method: "GET",
-        query: {
-          cart_id: cartId,
-        },
-        headers,
-        cache: "no-store",
-      }
+  const profiles = new Set(
+    (cart.items ?? []).map(
+      (i) =>
+        (i.product as { shipping_profile?: { id?: string } } | null)
+          ?.shipping_profile?.id
     )
-    .then(({ shipping_options }) => shipping_options)
-    .catch(() => {
-      return null
-    })
+  )
+  return SHIPPING_OPTIONS.filter((o) => profiles.has(o.shipping_profile_id))
 }
 
 export const calculatePriceForShippingOption = async (
   optionId: string,
-  cartId: string,
-  data?: Record<string, unknown>
-) => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
-  const body: { cart_id: string; data?: Record<string, unknown> } = {
-    cart_id: cartId,
-  }
-
-  if (data) {
-    body.data = data
-  }
-
-  return sdk.client
-    .fetch<{ shipping_option: HttpTypes.StoreCartShippingOption }>(
-      `/store/shipping-options/${optionId}/calculate`,
-      {
-        method: "POST",
-        body,
-        headers,
-        cache: "no-store",
-      }
-    )
-    .then(({ shipping_option }) => shipping_option)
-    .catch(() => null)
-}
+  _cartId: string,
+  _data?: Record<string, unknown>
+) => SHIPPING_OPTIONS.find((o) => o.id === optionId) ?? null
