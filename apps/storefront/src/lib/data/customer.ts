@@ -1,62 +1,30 @@
 "use server"
 
-import { sdk } from "@lib/config"
-import medusaError from "@lib/util/medusa-error"
 import { HttpTypes } from "@medusajs/types"
-import { revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
+import { mockAuth, mockCart, mockCustomers } from "@lib/mock/db"
 import {
-  getAuthHeaders,
-  getCacheOptions,
-  getCacheTag,
+  getAuthToken,
   getCartId,
+  getCustomerId,
   removeAuthToken,
   removeCartId,
   setAuthToken,
 } from "./cookies"
+import { revalidateStorefront } from "./revalidate"
 
 export const retrieveCustomer =
-  async (): Promise<HttpTypes.StoreCustomer | null> => {
-    const authHeaders = await getAuthHeaders()
-
-    if (!authHeaders) return null
-
-    const headers = {
-      ...authHeaders,
-    }
-
-    const next = {
-      ...(await getCacheOptions("customers")),
-    }
-
-    return await sdk.client
-      .fetch<{ customer: HttpTypes.StoreCustomer }>(`/store/customers/me`, {
-        method: "GET",
-        query: {
-          fields: "*orders",
-        },
-        headers,
-        next,
-        cache: "force-cache",
-      })
-      .then(({ customer }) => customer)
-      .catch(() => null)
-  }
+  async (): Promise<HttpTypes.StoreCustomer | null> =>
+    mockCustomers.retrieve(await getCustomerId())
 
 export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
-  const updateRes = await sdk.store.customer
-    .update(body, {}, headers)
-    .then(({ customer }) => customer)
-    .catch(medusaError)
-
-  const cacheTag = await getCacheTag("customers")
-  revalidateTag(cacheTag)
-
-  return updateRes
+  const customer = mockCustomers.update(await getCustomerId(), {
+    first_name: body.first_name ?? undefined,
+    last_name: body.last_name ?? undefined,
+    phone: body.phone ?? undefined,
+  })
+  revalidateStorefront()
+  return customer
 }
 
 export async function signup(_currentState: unknown, formData: FormData) {
@@ -69,36 +37,11 @@ export async function signup(_currentState: unknown, formData: FormData) {
   }
 
   try {
-    const token = await sdk.auth.register("customer", "emailpass", {
-      email: customerForm.email,
-      password: password,
-    })
-
-    await setAuthToken(token as string)
-
-    const headers = {
-      ...(await getAuthHeaders()),
-    }
-
-    const { customer: createdCustomer } = await sdk.store.customer.create(
-      customerForm,
-      {},
-      headers
-    )
-
-    const loginToken = await sdk.auth.login("customer", "emailpass", {
-      email: customerForm.email,
-      password,
-    })
-
-    await setAuthToken(loginToken as string)
-
-    const customerCacheTag = await getCacheTag("customers")
-    revalidateTag(customerCacheTag)
-
+    const token = mockAuth.register({ ...customerForm, password })
+    await setAuthToken(token)
     await transferCart()
 
-    return createdCustomer
+    return mockCustomers.retrieve(mockAuth.customerIdForToken(token))
   } catch (error) {
     return String(error)
   }
@@ -109,13 +52,7 @@ export async function login(_currentState: unknown, formData: FormData) {
   const password = formData.get("password") as string
 
   try {
-    await sdk.auth
-      .login("customer", "emailpass", { email, password })
-      .then(async (token) => {
-        await setAuthToken(token as string)
-        const customerCacheTag = await getCacheTag("customers")
-        revalidateTag(customerCacheTag)
-      })
+    await setAuthToken(mockAuth.login(email, password))
   } catch (error) {
     return String(error)
   }
@@ -128,34 +65,23 @@ export async function login(_currentState: unknown, formData: FormData) {
 }
 
 export async function signout(countryCode: string) {
-  await sdk.auth.logout()
+  mockAuth.logout(await getAuthToken())
 
   await removeAuthToken()
-
-  const customerCacheTag = await getCacheTag("customers")
-  revalidateTag(customerCacheTag)
-
   await removeCartId()
-
-  const cartCacheTag = await getCacheTag("carts")
-  revalidateTag(cartCacheTag)
+  revalidateStorefront()
 
   redirect(`/${countryCode}/account`)
 }
 
 export async function transferCart() {
   const cartId = await getCartId()
+  const customerId = await getCustomerId()
 
-  if (!cartId) {
-    return
+  if (cartId && customerId) {
+    mockCart.transfer(cartId, customerId)
   }
-
-  const headers = await getAuthHeaders()
-
-  await sdk.store.cart.transferCart(cartId, {}, headers)
-
-  const cartCacheTag = await getCacheTag("carts")
-  revalidateTag(cartCacheTag)
+  revalidateStorefront()
 }
 
 export const addCustomerAddress = async (
@@ -188,39 +114,24 @@ export const addCustomerAddress = async (
     is_default_shipping: isDefaultShipping,
   }
 
-  const headers = {
-    ...(await getAuthHeaders()),
+  try {
+    mockCustomers.addAddress(await getCustomerId(), address)
+    revalidateStorefront()
+    return { success: true, error: null }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
-
-  return sdk.store.customer
-    .createAddress(address, {}, headers)
-    .then(async () => {
-      const customerCacheTag = await getCacheTag("customers")
-      revalidateTag(customerCacheTag)
-      return { success: true, error: null }
-    })
-    .catch((err) => {
-      return { success: false, error: err.toString() }
-    })
 }
 
 export const deleteCustomerAddress = async (
   addressId: string
 ): Promise<void> => {
-  const headers = {
-    ...(await getAuthHeaders()),
+  try {
+    mockCustomers.deleteAddress(await getCustomerId(), addressId)
+    revalidateStorefront()
+  } catch {
+    // Already gone, or signed out — nothing to delete.
   }
-
-  await sdk.store.customer
-    .deleteAddress(addressId, headers)
-    .then(async () => {
-      const customerCacheTag = await getCacheTag("customers")
-      revalidateTag(customerCacheTag)
-      return { success: true, error: null }
-    })
-    .catch((err) => {
-      return { success: false, error: err.toString() }
-    })
 }
 
 type DefaultShippingPayload = {
@@ -253,56 +164,36 @@ const sameAddress = (
 export const upsertDefaultShippingAddress = async (
   payload: DefaultShippingPayload
 ): Promise<{ success: boolean; error: string | null }> => {
-  const authHeaders = await getAuthHeaders()
-  if (!authHeaders) {
+  const customerId = await getCustomerId()
+  const customer = mockCustomers.retrieve(customerId)
+  if (!customer) {
     return { success: false, error: "Not authenticated" }
   }
 
-  const headers = { ...authHeaders }
-
   try {
-    const customer = await retrieveCustomer()
-    if (!customer) {
-      return { success: false, error: "Customer not found" }
-    }
-
     const existing = customer.addresses?.find((a) => sameAddress(a, payload))
 
     if (existing) {
       if (!existing.is_default_shipping) {
-        await sdk.store.customer.updateAddress(
-          existing.id,
-          { is_default_shipping: true },
-          {},
-          headers
-        )
+        mockCustomers.updateAddress(customerId, existing.id, {
+          is_default_shipping: true,
+        })
       }
     } else {
-      await sdk.store.customer.createAddress(
-        {
-          first_name: payload.first_name,
-          last_name: payload.last_name,
-          address_1: payload.address_1,
-          address_2: payload.address_2 || "",
-          city: payload.city,
-          postal_code: payload.postal_code,
-          province: payload.province || "",
-          country_code: payload.country_code,
-          phone: payload.phone || "",
-          company: payload.company || "",
-          is_default_shipping: true,
-          is_default_billing: !customer.addresses?.some(
-            (a) => a.is_default_billing
-          ),
-        },
-        {},
-        headers
-      )
+      mockCustomers.addAddress(customerId, {
+        ...payload,
+        address_2: payload.address_2 || "",
+        province: payload.province || "",
+        phone: payload.phone || "",
+        company: payload.company || "",
+        is_default_shipping: true,
+        is_default_billing: !customer.addresses?.some(
+          (a) => a.is_default_billing
+        ),
+      })
     }
 
-    const customerCacheTag = await getCacheTag("customers")
-    revalidateTag(customerCacheTag)
-
+    revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
     return {
@@ -323,7 +214,7 @@ export const updateCustomerAddress = async (
     return { success: false, error: "Address ID is required" }
   }
 
-  const address = {
+  const address: Record<string, unknown> = {
     first_name: formData.get("first_name") as string,
     last_name: formData.get("last_name") as string,
     company: formData.get("company") as string,
@@ -333,7 +224,7 @@ export const updateCustomerAddress = async (
     postal_code: formData.get("postal_code") as string,
     province: formData.get("province") as string,
     country_code: formData.get("country_code") as string,
-  } as HttpTypes.StoreUpdateCustomerAddress
+  }
 
   const phone = formData.get("phone") as string
 
@@ -352,18 +243,11 @@ export const updateCustomerAddress = async (
       rawDefaultBilling === "on" || rawDefaultBilling === "true"
   }
 
-  const headers = {
-    ...(await getAuthHeaders()),
+  try {
+    mockCustomers.updateAddress(await getCustomerId(), addressId, address)
+    revalidateStorefront()
+    return { success: true, error: null }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
-
-  return sdk.store.customer
-    .updateAddress(addressId, address, {}, headers)
-    .then(async () => {
-      const customerCacheTag = await getCacheTag("customers")
-      revalidateTag(customerCacheTag)
-      return { success: true, error: null }
-    })
-    .catch((err) => {
-      return { success: false, error: err.toString() }
-    })
 }

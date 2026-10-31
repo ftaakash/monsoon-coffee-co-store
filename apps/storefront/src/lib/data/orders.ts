@@ -1,64 +1,20 @@
 "use server"
 
-import { sdk } from "@lib/config"
-import medusaError from "@lib/util/medusa-error"
-import { revalidateTag } from "next/cache"
-import { getAuthHeaders, getCacheOptions, getCacheTag } from "./cookies"
 import { HttpTypes } from "@medusajs/types"
+import { mockOrders } from "@lib/mock/db"
+import { getCustomerId } from "./cookies"
+import { revalidateStorefront } from "./revalidate"
 
-export const retrieveOrder = async (id: string) => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
-  const next = {
-    ...(await getCacheOptions("orders")),
-  }
-
-  return sdk.client
-    .fetch<HttpTypes.StoreOrderResponse>(`/store/orders/${id}`, {
-      method: "GET",
-      query: {
-        fields:
-          "*payment_collections.payments,*items,*items.metadata,*items.variant,*items.product,*fulfillments,*fulfillments.labels,+fulfillments.metadata,+fulfillments.provider_id,+fulfillments.data,*shipping_methods",
-      },
-      headers,
-      next,
-      cache: "force-cache",
-    })
-    .then(({ order }) => order)
-    .catch((err) => medusaError(err))
-}
+export const retrieveOrder = async (id: string) => mockOrders.retrieve(id)
 
 export const listOrders = async (
   limit: number = 10,
   offset: number = 0,
-  filters?: Record<string, unknown>
+  _filters?: Record<string, unknown>
 ) => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
-  const next = {
-    ...(await getCacheOptions("orders")),
-  }
-
-  return sdk.client
-    .fetch<HttpTypes.StoreOrderListResponse>(`/store/orders`, {
-      method: "GET",
-      query: {
-        limit,
-        offset,
-        order: "-created_at",
-        fields: "*items,+items.metadata,*items.variant,*items.product",
-        ...filters,
-      },
-      headers,
-      next,
-      cache: "force-cache",
-    })
-    .then(({ orders }) => orders)
-    .catch((err) => medusaError(err))
+  const customerId = await getCustomerId()
+  if (!customerId) throw new Error("Unauthorized")
+  return mockOrders.listForCustomer(customerId, limit, offset)
 }
 
 export const createTransferRequest = async (
@@ -79,50 +35,31 @@ export const createTransferRequest = async (
     return { success: false, error: "Order ID is required", order: null }
   }
 
-  const headers = await getAuthHeaders()
-
-  return await sdk.store.order
-    .requestTransfer(
-      id,
-      {},
-      {
-        fields: "id, email",
-      },
-      headers
-    )
-    .then(({ order }) => ({ success: true, error: null, order }))
-    .catch((err) => ({ success: false, error: err.message, order: null }))
+  try {
+    return { success: true, error: null, order: mockOrders.requestTransfer(id) }
+  } catch (err) {
+    return { success: false, error: (err as Error).message, order: null }
+  }
 }
 
-export const acceptTransferRequest = async (id: string, token: string) => {
-  const headers = await getAuthHeaders()
-
-  return await sdk.store.order
-    .acceptTransfer(id, { token }, {}, headers)
-    .then(({ order }) => ({ success: true, error: null, order }))
-    .catch((err) => ({ success: false, error: err.message, order: null }))
+export const acceptTransferRequest = async (id: string, _token: string) => {
+  try {
+    const order = mockOrders.acceptTransfer(id, await getCustomerId())
+    revalidateStorefront()
+    return { success: true, error: null, order }
+  } catch (err) {
+    return { success: false, error: (err as Error).message, order: null }
+  }
 }
 
 export const cancelOrder = async (
   id: string
 ): Promise<{ success: boolean; error: string | null }> => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
   try {
-    await sdk.client.fetch(`/store/orders/${id}/cancel`, {
-      method: "POST",
-      headers,
-    })
-
-    
-    const ordersCacheTag = await getCacheTag("orders")
-    revalidateTag(ordersCacheTag)
-
+    mockOrders.cancel(id, await getCustomerId())
+    revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
-    console.error("Error canceling order:", err)
     return {
       success: false,
       error: err instanceof Error ? err.message : "Unable to cancel order",
@@ -134,20 +71,9 @@ export const requestOrderRefund = async (
   id: string,
   note?: string
 ): Promise<{ success: boolean; error: string | null }> => {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
   try {
-    await sdk.client.fetch(`/store/orders/${id}/refund`, {
-      method: "POST",
-      headers,
-      body: note ? { note } : {},
-    })
-
-    const ordersCacheTag = await getCacheTag("orders")
-    revalidateTag(ordersCacheTag)
-
+    mockOrders.requestRefund(id, await getCustomerId(), note)
+    revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
     return {
@@ -157,11 +83,10 @@ export const requestOrderRefund = async (
   }
 }
 
-export const declineTransferRequest = async (id: string, token: string) => {
-  const headers = await getAuthHeaders()
-
-  return await sdk.store.order
-    .declineTransfer(id, { token }, {}, headers)
-    .then(({ order }) => ({ success: true, error: null, order }))
-    .catch((err) => ({ success: false, error: err.message, order: null }))
+export const declineTransferRequest = async (id: string, _token: string) => {
+  try {
+    return { success: true, error: null, order: mockOrders.declineTransfer(id) }
+  } catch (err) {
+    return { success: false, error: (err as Error).message, order: null }
+  }
 }

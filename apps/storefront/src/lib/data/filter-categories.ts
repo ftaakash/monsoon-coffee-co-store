@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@lib/config"
+import { FILTER_CATEGORIES } from "@lib/mock/catalog"
 
 export type StoreFilterTag = {
   id: string
@@ -15,16 +15,5 @@ export type StoreFilterCategory = {
   tags: StoreFilterTag[]
 }
 
-export const listFilterCategories = async (): Promise<StoreFilterCategory[]> => {
-  try {
-    const res = await sdk.client.fetch<{
-      filter_categories: StoreFilterCategory[]
-    }>(`/store/filter-categories`, {
-      method: "GET",
-      cache: "no-store",
-    })
-    return res.filter_categories ?? []
-  } catch {
-    return []
-  }
-}
+export const listFilterCategories = async (): Promise<StoreFilterCategory[]> =>
+  FILTER_CATEGORIES

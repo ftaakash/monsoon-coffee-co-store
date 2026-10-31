@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { sdk } from "@lib/config"
+import { checkPincode } from "@lib/data/shipping"
 
 export type PincodeEstimate = {
   serviceable: boolean
@@ -64,32 +64,9 @@ export default function MonsoonPincodeCheck({
     }
     setLoading(true)
     try {
-      if (!cartId) {
-        const s = await sdk.client.fetch<{
-          serviceable: boolean
-          error?: string
-        }>(`/store/shipping/check-pincode?pincode=${target}`, {
-          method: "GET",
-          cache: "no-store",
-        })
-        const r: PincodeEstimate = {
-          serviceable: s.serviceable === true,
-          pincode: target,
-          error: s.error,
-        }
-        setResult(r)
-        onEstimate?.(r)
-      } else {
-        const e = await sdk.client.fetch<PincodeEstimate>(
-          `/store/shipping/estimate?pincode=${target}&cart_id=${encodeURIComponent(
-            cartId
-          )}&payment_type=${paymentType}`,
-          { method: "GET", cache: "no-store" }
-        )
-        const r: PincodeEstimate = { ...e, pincode: target }
-        setResult(r)
-        onEstimate?.(r)
-      }
+      const r = await checkPincode(target, cartId)
+      setResult(r)
+      onEstimate?.(r)
     } catch (err) {
       const msg = (err as Error).message || "Could not check delivery"
       setError(msg)

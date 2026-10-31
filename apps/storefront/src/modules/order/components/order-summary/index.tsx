@@ -7,7 +7,7 @@ type OrderSummaryProps = {
 
 const OrderSummary = ({ order }: OrderSummaryProps) => {
   const fmt = (amount?: number | null) =>
-    amount
+    amount != null
       ? convertToLocale({ amount, currency_code: order.currency_code })
       : undefined
 

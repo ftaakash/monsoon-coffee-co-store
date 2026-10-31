@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@lib/config"
+import { COFFEE_PROFILES } from "@lib/mock/catalog"
 
 export type ExtractionPoint = {
   time_s: number
@@ -26,15 +26,5 @@ export type CoffeeProfile = {
 export async function getProductCoffeeProfile(
   productId: string
 ): Promise<CoffeeProfile | null> {
-  try {
-    const res = await sdk.client.fetch<{
-      coffee_profile: CoffeeProfile | null
-    }>(`/store/products/${productId}/coffee-profile`, {
-      method: "GET",
-      next: { tags: [`product-${productId}`, "products"] },
-    })
-    return res?.coffee_profile ?? null
-  } catch {
-    return null
-  }
+  return COFFEE_PROFILES[productId] ?? null
 }

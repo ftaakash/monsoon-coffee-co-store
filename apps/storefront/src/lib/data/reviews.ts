@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { sdk } from "@lib/config"
-import { getAuthHeaders } from "./cookies"
+import { mockReviews } from "@lib/mock/db"
+import { getCustomerId } from "./cookies"
 
 export type Review = {
   id: string
@@ -32,23 +32,11 @@ export type ListReviewsResult = {
 export async function listProductReviews(
   productId: string
 ): Promise<ListReviewsResult> {
-  try {
-    const res = await sdk.client.fetch<ListReviewsResult>(
-      `/store/products/${productId}/reviews`,
-      { method: "GET", cache: "no-store" }
-    )
-    return {
-      reviews: res?.reviews || [],
-      summary: res?.summary || { count: 0, average_rating: 0 },
-    }
-  } catch {
-    return { reviews: [], summary: { count: 0, average_rating: 0 } }
-  }
+  return mockReviews.list(productId)
 }
 
 // Each image is either an already-hosted URL, or a fresh upload encoded as
-// base64 with its MIME type. The backend uploads the latter via the file
-// module and stores the resulting URLs alongside the review.
+// base64 with its MIME type. Uploads are kept inline as data URLs.
 export type ReviewImageInput =
   | { url: string }
   | { data: string; mime: string; name?: string }
@@ -70,34 +58,28 @@ export type CreateReviewResult =
 export async function createProductReview(
   input: CreateReviewInput
 ): Promise<CreateReviewResult> {
-  const headers = await getAuthHeaders()
-  if (!("authorization" in headers)) {
+  const customerId = await getCustomerId()
+  if (!customerId) {
     return { ok: false, error: "Sign in to leave a review.", needsAuth: true }
   }
 
   try {
-    const res = await sdk.client.fetch<{ review: Review }>(
-      `/store/products/${input.product_id}/reviews`,
-      {
-        method: "POST",
-        headers,
-        body: {
-          variant_id: input.variant_id || undefined,
-          rating: input.rating,
-          title: input.title || undefined,
-          body: input.body,
-          images: input.images?.length ? input.images : undefined,
-        },
-      }
-    )
+    const review = mockReviews.create(customerId, {
+      product_id: input.product_id,
+      variant_id: input.variant_id,
+      rating: input.rating,
+      title: input.title,
+      body: input.body,
+      images: (input.images ?? []).map((img) =>
+        "url" in img ? img.url : `data:${img.mime};base64,${img.data}`
+      ),
+    })
     if (input.productHandle) {
       revalidatePath(`/[countryCode]/(main)/products/${input.productHandle}`, "page")
     }
-    return { ok: true, review: res?.review }
+    return { ok: true, review }
   } catch (e: any) {
-    const msg: string =
-      e?.message ||
-      (typeof e === "string" ? e : "Could not submit review. Please try again.")
+    const msg: string = e?.message || "Could not submit review. Please try again."
     return {
       ok: false,
       error: msg,

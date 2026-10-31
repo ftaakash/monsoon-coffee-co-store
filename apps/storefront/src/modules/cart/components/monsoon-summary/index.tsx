@@ -22,6 +22,11 @@ export default function MonsoonCartSummary({ cart }: Props) {
 
   const subtotal = cart.subtotal ?? 0
   const total = cart.total ?? 0
+  const discount = cart.discount_total ?? 0
+  const promoCodes = (cart.promotions ?? [])
+    .map((p) => p.code)
+    .filter(Boolean)
+    .join(", ")
 
   const initialPincode =
     cart.shipping_address?.postal_code?.toString().replace(/\D/g, "") ?? ""
@@ -46,6 +51,19 @@ export default function MonsoonCartSummary({ cart }: Props) {
             {convertToLocale({ amount: subtotal, currency_code: currency })}
           </span>
         </div>
+        {discount > 0 && (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="font-semibold text-ink/85">
+              Discount
+              {promoCodes ? (
+                <span className="ml-2 text-xs text-accent">{promoCodes}</span>
+              ) : null}
+            </span>
+            <span className="font-black text-ink">
+              −{convertToLocale({ amount: discount, currency_code: currency })}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">

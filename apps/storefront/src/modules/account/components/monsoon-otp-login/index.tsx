@@ -52,7 +52,9 @@ export default function MonsoonOtpLogin({
         return
       }
       setStage("code")
-      setInfo(`We sent a 6-digit code to ${result.emailMasked ?? email.trim()}.`)
+      setInfo(
+        `Demo mode: no email is sent to ${result.emailMasked ?? email.trim()}. Use code 123456.`
+      )
     })
   }
 

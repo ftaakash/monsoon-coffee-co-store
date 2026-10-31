@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@lib/config"
+import { BREWS, BREW_LAB_CATEGORY_IDS } from "@lib/mock/catalog"
 
 export type BrewParamSchemaItem = {
   key: string
@@ -36,48 +36,17 @@ export type BrewRecipe = {
 }
 
 export async function listProductBrews(productId: string): Promise<BrewRecipe[]> {
-  try {
-    const res = await sdk.client.fetch<{ brew_recipes: BrewRecipe[] }>(
-      `/store/products/${productId}/brews`,
-      { method: "GET", cache: "no-store" }
-    )
-    return res?.brew_recipes || []
-  } catch {
-    return []
-  }
+  return BREWS[productId] ?? []
 }
 
-const FALLBACK_CATEGORY_HANDLE = "coffee"
-
 /**
- * Whether the brew lab section should render for a product. Pulls the list
- * of enabled product category IDs from /store/brew-settings; falls back to
- * a category with handle "coffee" when no setting has been saved yet.
+ * Whether the brew lab section should render for a product: true when it sits
+ * in one of the coffee categories.
  */
 export async function isBrewLabEnabledForProduct(product: {
   categories?: Array<{ id?: string | null; handle?: string | null }> | null
 }): Promise<boolean> {
-  const categories = (product.categories ?? []).filter(
-    (c): c is { id?: string | null; handle?: string | null } => !!c
-  )
-
-  let enabledIds: string[] = []
-  try {
-    const res = await sdk.client.fetch<{
-      enabled_product_category_ids: string[]
-    }>("/store/brew-settings", { method: "GET", cache: "no-store" })
-    enabledIds = res?.enabled_product_category_ids ?? []
-  } catch {
-    enabledIds = []
-  }
-
-  if (enabledIds.length > 0) {
-    const enabled = new Set(enabledIds)
-    return categories.some((c) => !!c.id && enabled.has(c.id))
-  }
-  return categories.some(
-    (c) =>
-      typeof c.handle === "string" &&
-      c.handle.toLowerCase() === FALLBACK_CATEGORY_HANDLE
+  return (product.categories ?? []).some(
+    (c) => !!c?.id && BREW_LAB_CATEGORY_IDS.includes(c.id)
   )
 }

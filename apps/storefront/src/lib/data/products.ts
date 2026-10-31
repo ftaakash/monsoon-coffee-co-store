@@ -1,47 +1,80 @@
 "use server"
 
-import { sdk } from "@lib/config"
 import { sortProducts } from "@lib/util/sort-products"
 import { HttpTypes } from "@medusajs/types"
 import { SortOptions } from "@modules/store/components/refinement-list/sort-products"
-import { getAuthHeaders, getCacheOptions } from "./cookies"
+import { listAllProducts } from "@lib/mock/db"
 import { getRegion, retrieveRegion } from "./regions"
+
+type ProductQuery = HttpTypes.FindParams &
+  HttpTypes.StoreProductListParams & {
+    tag_id?: string | string[]
+  }
+
+const asArray = (v: unknown): string[] =>
+  v === undefined || v === null ? [] : Array.isArray(v) ? v.map(String) : [String(v)]
+
+// Applies the subset of Medusa's /store/products filters the storefront uses.
+// Within one filter values are OR'd; across filters they are AND'd.
+function filterProducts(
+  products: HttpTypes.StoreProduct[],
+  query: ProductQuery = {}
+) {
+  const ids = asArray(query.id)
+  const handles = asArray(query.handle)
+  const categoryIds = asArray(query.category_id)
+  const collectionIds = asArray(query.collection_id)
+  const tagIds = asArray(query.tag_id)
+  const q = typeof query.q === "string" ? query.q.toLowerCase() : ""
+
+  return products.filter((p) => {
+    if (ids.length && !ids.includes(p.id)) return false
+    if (handles.length && !handles.includes(p.handle ?? "")) return false
+    if (
+      categoryIds.length &&
+      !p.categories?.some((c) => categoryIds.includes(c.id))
+    )
+      return false
+    if (collectionIds.length && !collectionIds.includes(p.collection_id ?? ""))
+      return false
+    if (tagIds.length && !p.tags?.some((t) => tagIds.includes(t.id)))
+      return false
+    if (
+      q &&
+      !`${p.title} ${p.description ?? ""}`.toLowerCase().includes(q)
+    )
+      return false
+    return true
+  })
+}
 
 export const listProducts = async ({
   pageParam = 1,
   queryParams,
   countryCode,
   regionId,
-  noCache = false,
 }: {
   pageParam?: number
-  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductListParams
+  queryParams?: ProductQuery
   countryCode?: string
   regionId?: string
-  // Skip the Next.js data cache and read straight from the backend. Use on
-  // surfaces that must always show live price/stock (e.g. the product detail
-  // page) rather than waiting for a revalidation webhook.
   noCache?: boolean
 }): Promise<{
   response: { products: HttpTypes.StoreProduct[]; count: number }
   nextPage: number | null
-  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductListParams
+  queryParams?: ProductQuery
 }> => {
   if (!countryCode && !regionId) {
     throw new Error("Country code or region ID is required")
   }
 
-  const limit = queryParams?.limit || 12
+  const limit = Number(queryParams?.limit) || 12
   const _pageParam = Math.max(pageParam, 1)
   const offset = _pageParam === 1 ? 0 : (_pageParam - 1) * limit
 
-  let region: HttpTypes.StoreRegion | undefined | null
-
-  if (countryCode) {
-    region = await getRegion(countryCode)
-  } else {
-    region = await retrieveRegion(regionId!)
-  }
+  const region = countryCode
+    ? await getRegion(countryCode)
+    : await retrieveRegion(regionId!)
 
   if (!region) {
     return {
@@ -50,50 +83,24 @@ export const listProducts = async ({
     }
   }
 
-  const headers = {
-    ...(await getAuthHeaders()),
+  // Newest first, matching the backend's default ordering.
+  const matching = sortProducts(
+    filterProducts(listAllProducts(), queryParams),
+    "created_at"
+  )
+  const count = matching.length
+  const products = matching.slice(offset, offset + limit)
+  const nextPage = count > offset + limit ? pageParam + 1 : null
+
+  return {
+    response: { products, count },
+    nextPage,
+    queryParams,
   }
-
-  // no-store and the tag-based data cache are mutually exclusive: when noCache
-  // is set we read live and drop the tags entirely.
-  const cacheOpts: { next?: { tags?: string[] }; cache: RequestCache } = noCache
-    ? { cache: "no-store" }
-    : { next: { ...(await getCacheOptions("products")) }, cache: "force-cache" }
-
-  return sdk.client
-    .fetch<{ products: HttpTypes.StoreProduct[]; count: number }>(
-      `/store/products`,
-      {
-        method: "GET",
-        query: {
-          limit,
-          offset,
-          region_id: region?.id,
-          fields:
-            "*variants.calculated_price,+variants.inventory_quantity,+variants.manage_inventory,+variants.allow_backorder,*variants.calculated_price,*variants.images,+metadata,+tags,+categories.id,+categories.handle,+categories.name,",
-          ...queryParams,
-        },
-        headers,
-        ...cacheOpts,
-      }
-    )
-    .then(({ products, count }) => {
-      const nextPage = count > offset + limit ? pageParam + 1 : null
-
-      return {
-        response: {
-          products,
-          count,
-        },
-        nextPage: nextPage,
-        queryParams,
-      }
-    })
 }
 
 /**
- * This will fetch 100 products to the Next.js cache and sort them based on the sortBy parameter.
- * It will then return the paginated products based on the page and limit parameters.
+ * Returns every matching product sorted by `sortBy`, then the requested page.
  */
 export const listProductsWithSort = async ({
   page = 0,
@@ -102,15 +109,15 @@ export const listProductsWithSort = async ({
   countryCode,
 }: {
   page?: number
-  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
+  queryParams?: ProductQuery
   sortBy?: SortOptions
   countryCode: string
 }): Promise<{
   response: { products: HttpTypes.StoreProduct[]; count: number }
   nextPage: number | null
-  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
+  queryParams?: ProductQuery
 }> => {
-  const limit = queryParams?.limit || 12
+  const limit = Number(queryParams?.limit) || 12
   const {
     response: { products, count },
   } = await listProducts({

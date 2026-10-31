@@ -1,12 +1,6 @@
 packages:
-  - "apps/**"
-  - "!apps/backend/.medusa/**"
+  - "apps/*"
   - "!apps/storefront/.next/**"
 allowBuilds:
-  '@medusajs/telemetry': true
-  '@swc/core': true
-  esbuild: true
-  msgpackr-extract: true
-  protobufjs: true
   sharp: true
   unrs-resolver: true
