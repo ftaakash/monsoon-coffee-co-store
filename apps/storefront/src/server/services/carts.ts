@@ -336,7 +336,8 @@ export function listCartShippingOptions(cartId: string) {
 
 export function setShippingMethods(cartId: string, optionIds: string[]) {
   openCartRow(cartId)
-  const valid = listShippingOptions().map((o) => o.id)
+  // Only options for something in the cart: no ticket delivery without a ticket.
+  const valid = listCartShippingOptions(cartId).map((o) => o.id)
   const ids = Array.from(new Set(optionIds.filter((id) => valid.includes(id))))
   touch(cartId, "shipping_option_ids_json = ?", JSON.stringify(ids))
   return retrieveCart(cartId)!

@@ -1,7 +1,11 @@
 # Monsoon Coffee Co. — Storefront, API and Admin
 
-The Monsoon Coffee Co. online store, built with Next.js. One app contains three
-parts:
+The Monsoon Coffee Co. online store, built with Next.js. This is the
+`mock-storefront` branch: a self-contained version of the store that runs on
+any laptop with no external services, separate from the production setup on
+`main` (Medusa, Postgres, Redis, Razorpay, Docker).
+
+One app contains three parts:
 
 - **Storefront** (`/in/...`): browse, shop, check out and manage an account.
 - **REST API** (`/api/store/...` and `/api/admin/...`): Next.js route handlers
@@ -54,6 +58,26 @@ No environment variables are required. To change the defaults, copy
 | Promo codes | `MONSOON10` (10% off), `FIRSTBREW` (15% off) |
 | Payment | Demo only. "Place order" completes the order without charging anything |
 
+## Sample data
+
+A new database starts with:
+
+- **10 products:** five coffees (Monsooned Malabar AA, Chikmagalur Estate
+  Washed, Coorg Honey Process, Araku Valley Natural, Baba Budangiri Dark
+  Roast), brew gear, merch and a cupping event. Each has variants, prices and
+  stock. The coffees also have a coffee profile and brew recipes.
+- **26 customer reviews,** two or three on every product.
+- **A demo shopper** with a saved address and delivered order #1001, and a
+  **demo admin**.
+- **Store filters** (origin, process, roast), two collections, shipping
+  options and two promo codes.
+
+All of it is defined in `apps/storefront/src/server/db/seed-data.ts`. Products
+and stock are seeded only into an empty database. Sample reviews are also
+checked on every start, and any that are missing are added, so an existing
+database picks up new ones without a reset. A review the admin has hidden stays
+hidden.
+
 ## How it fits together
 
 ```
@@ -74,7 +98,7 @@ Admin panel (src/app/admin) ── src/lib/admin/* ── fetch() ──►  /ap
 | Folder (under `apps/storefront/src`) | What it does |
 |---|---|
 | `server/db/schema.ts` | Every table: products, variants, carts, orders, customers, sessions, reviews, messages… |
-| `server/db/seed.ts`, `seed-data.ts` | Sample catalogue, demo shopper, demo admin and order #1001, inserted into an empty database |
+| `server/db/seed.ts`, `seed-data.ts` | Sample catalogue, reviews, demo shopper, demo admin and order #1001 |
 | `server/services/*` | The backend logic: catalogue, carts and totals, orders, customers and sign-in, reviews and contact, admin |
 | `server/http.ts` | Wraps every route: JSON responses, error codes, shopper/admin authentication |
 | `app/api/store/*` | Public store API used by the storefront |

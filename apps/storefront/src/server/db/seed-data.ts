@@ -456,40 +456,76 @@ export const EVENT_DETAILS: Record<string, EventDetail> = {
   },
 }
 
+// Sample customer reviews, 2–3 per product. Missing ones are inserted on every
+// start (see syncSeedReviews), so databases created before a review was added
+// here pick it up too.
+const review = (
+  id: string,
+  product_id: string,
+  customer_name: string,
+  variant_title: string | null,
+  rating: number,
+  title: string,
+  body: string,
+  created_at: string
+): Review => ({
+  id,
+  product_id,
+  customer_name,
+  variant_title,
+  rating,
+  title,
+  body,
+  status: "published",
+  created_at: `${created_at}T09:00:00.000Z`,
+})
+
 export const SEED_REVIEWS: Review[] = [
-  {
-    id: "rev_1",
-    product_id: "prod_malabar",
-    customer_name: "Ananya R.",
-    variant_title: "500g",
-    rating: 5,
-    title: "My daily cup",
-    body: "Smooth, chocolatey and no sourness at all. Works great in my moka pot.",
-    status: "published",
-    created_at: "2025-06-15T09:00:00.000Z",
-  },
-  {
-    id: "rev_2",
-    product_id: "prod_malabar",
-    customer_name: "Karthik S.",
-    variant_title: "250g",
-    rating: 4,
-    title: "Great body",
-    body: "Heavy and earthy. I'd love a slightly lighter roast option, but still excellent.",
-    status: "published",
-    created_at: "2025-06-02T09:00:00.000Z",
-  },
-  {
-    id: "rev_3",
-    product_id: "prod_chikmagalur",
-    customer_name: "Meera P.",
-    variant_title: "250g",
-    rating: 5,
-    title: "So bright",
-    body: "Tastes like orange peel in a V-style pour over. Lovely.",
-    status: "published",
-    created_at: "2025-05-30T09:00:00.000Z",
-  },
+  // Monsooned Malabar AA
+  review("rev_1", "prod_malabar", "Ananya R.", "500g", 5, "My daily cup", "Smooth, chocolatey and no sourness at all. Works great in my moka pot.", "2025-06-15"),
+  review("rev_2", "prod_malabar", "Karthik S.", "250g", 4, "Great body", "Heavy and earthy. I'd love a slightly lighter roast option, but still excellent.", "2025-06-02"),
+  review("rev_malabar_3", "prod_malabar", "Farhan Q.", "1kg", 5, "Worth the bulk bag", "Bought the 1kg for the office. Holds up well for two weeks if you keep it sealed, and everyone asks what it is.", "2025-07-08"),
+
+  // Chikmagalur Estate Washed
+  review("rev_3", "prod_chikmagalur", "Meera P.", "250g", 5, "So bright", "Tastes like orange peel in a V-style pour over. Lovely.", "2025-05-30"),
+  review("rev_chik_2", "prod_chikmagalur", "Rohit B.", "500g", 4, "Clean and floral", "Very clean cup with a jasmine finish. A bit too light for milk, so I keep it for black coffee.", "2025-06-21"),
+  review("rev_chik_3", "prod_chikmagalur", "Lakshmi V.", "250g", 5, "Proud of Indian coffee", "Didn't know Indian beans could taste this delicate. Brewed at 92°C with a 1:16 ratio and it was perfect.", "2025-07-02"),
+
+  // Coorg Honey Process
+  review("rev_coorg_1", "prod_coorg", "Sneha K.", "250g", 5, "Naturally sweet", "No sugar needed. Stone fruit and brown sugar, exactly like the label says.", "2025-05-12"),
+  review("rev_coorg_2", "prod_coorg", "Vikram J.", "500g", 4, "Syrupy body", "Thick, sweet and easy to brew. The 1kg was sold out, so I hope it comes back.", "2025-06-04"),
+  review("rev_coorg_3", "prod_coorg", "Divya M.", "250g", 4, "Great in a French press", "Rich and round in a French press. Slightly muddy in my AeroPress, so I'll grind coarser next time.", "2025-06-27"),
+
+  // Araku Valley Natural
+  review("rev_araku_1", "prod_araku", "Arjun M.", "250g", 5, "Like berry jam", "First natural process coffee I've tried and it's wild: berries and red wine. Gifted a bag to my brother too.", "2025-04-02"),
+  review("rev_araku_2", "prod_araku", "Pooja N.", "500g", 4, "Fruity, not for everyone", "I love it, my husband finds it too fruity. Brew it a little cooler (90°C) or it turns sharp.", "2025-04-24"),
+  review("rev_araku_3", "prod_araku", "Sanjay T.", "250g", 5, "Supports a great cause", "Lovely cup, and it's good to know it comes from farming cooperatives. Fresh roast date too.", "2025-05-19"),
+
+  // Baba Budangiri Dark Roast
+  review("rev_bb_1", "prod_bababudan", "Ramesh I.", "Filter", 5, "Proper filter kaapi", "Strong decoction, just like home in Chennai. Mix with hot milk and a little sugar.", "2025-03-01"),
+  review("rev_bb_2", "prod_bababudan", "Neha S.", "Espresso", 4, "Bold for lattes", "Cuts through milk nicely. A bit too smoky for me as a straight espresso.", "2025-03-22"),
+  review("rev_bb_3", "prod_bababudan", "Imran A.", "French Press", 4, "Good value on sale", "Smoky, nutty and strong. Great price at ₹499. The grind was spot on for my press.", "2025-04-10"),
+
+  // Monsoon Pour-Over Kit
+  review("rev_kit_1", "prod_pourover_kit", "Priya R.", "Default", 5, "Perfect starter kit", "Everything you need in one box. The guide card helped me get a good cup on day one.", "2025-02-10"),
+  review("rev_kit_2", "prod_pourover_kit", "Aditya G.", "Default", 4, "Lovely gift", "Bought it for my dad. The glass server is a bit thin, but the dripper is solid.", "2025-03-05"),
+
+  // Ceramic Cone Dripper
+  review("rev_drip_1", "prod_dripper", "Kavya L.", "Monsoon Blue", 5, "Beautiful and heavy", "The blue glaze is gorgeous and it holds heat well. Draws down evenly with size 02 filters.", "2025-01-18"),
+  review("rev_drip_2", "prod_dripper", "Harish P.", "Ink Black", 4, "Solid dripper", "Brews consistently. Wish it came with a few filters to start with.", "2025-02-26"),
+
+  // Monsoon Enamel Mug
+  review("rev_mug_1", "prod_mug", "Asha M.", "White", 5, "Camping favourite", "Took it on a Coorg trek. Light, tough and the stamp still looks great after many washes.", "2024-12-20"),
+  review("rev_mug_2", "prod_mug", "Siddharth R.", "White", 3, "Gets hot to hold", "Looks great, but enamel gets hot quickly. Fine for coffee that's cooled a little.", "2025-01-11"),
+
+  // Roastery Canvas Tote
+  review("rev_tote_1", "prod_tote", "Nandini H.", "Default", 5, "Sturdy and roomy", "Fits my laptop and groceries. The print hasn't faded after several washes.", "2024-11-02"),
+  review("rev_tote_2", "prod_tote", "Gaurav D.", "Default", 4, "Nice canvas", "Heavyweight fabric and good stitching. An inside pocket would make it perfect.", "2024-12-08"),
+
+  // Monsoon Cupping Session
+  review("rev_cup_1", "prod_cupping", "Rahul V.", "General", 5, "Learned so much", "Two hours flew by. Tasting six origins side by side finally made 'acidity' make sense to me.", "2025-06-28"),
+  review("rev_cup_2", "prod_cupping", "Shreya C.", "General", 5, "Great Saturday plan", "Friendly roasters, small group, and the 10% off beans afterwards was a nice touch.", "2025-07-05"),
+  review("rev_cup_3", "prod_cupping", "Anil K.", "General", 4, "Fun but a bit fast", "Really enjoyed it. The scoring section felt rushed for beginners, but they answered every question.", "2025-07-12"),
 ]
 
 // ── Checkout options ───────────────────────────────────────────────────────

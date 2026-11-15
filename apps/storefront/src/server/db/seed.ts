@@ -24,7 +24,8 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 3600 * 1000).toISO
 
 /**
  * Fills an empty database with the starting catalogue, a demo customer with
- * one delivered order, and an admin user. Does nothing once products exist.
+ * one delivered order, and an admin user. Does nothing once products exist,
+ * except add any sample reviews that are missing.
  */
 export function seedDatabase(db: Database.Database) {
   // IMMEDIATE takes the write lock up front, so two processes starting at the
@@ -106,18 +107,6 @@ export function seedDatabase(db: Database.Database) {
 
     for (const o of SHIPPING_OPTIONS) insert("shipping_options", o)
     for (const p of PROMO_CODES) insert("promo_codes", { ...p, active: true })
-    for (const r of SEED_REVIEWS)
-      insert("reviews", {
-        id: r.id,
-        product_id: r.product_id,
-        customer_name: r.customer_name ?? null,
-        variant_title: r.variant_title ?? null,
-        rating: r.rating,
-        title: r.title ?? null,
-        body: r.body,
-        status: r.status,
-        created_at: r.created_at,
-      })
 
     const c = DEMO_CUSTOMER
     insert("customers", {
@@ -147,6 +136,34 @@ export function seedDatabase(db: Database.Database) {
 
     seedDeliveredOrder(insert)
   }).immediate()
+
+  syncSeedReviews(db)
+}
+
+/**
+ * Adds any sample review that isn't in the database yet. INSERT OR IGNORE
+ * skips ids that already exist, so a review the admin has hidden stays hidden.
+ */
+function syncSeedReviews(db: Database.Database) {
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO reviews (id, product_id, customer_name, variant_title, rating, title, body, status, created_at)
+     SELECT @id, @product_id, @customer_name, @variant_title, @rating, @title, @body, @status, @created_at
+     WHERE EXISTS (SELECT 1 FROM products WHERE id = @product_id)`
+  )
+  db.transaction(() => {
+    for (const r of SEED_REVIEWS)
+      insert.run({
+        id: r.id,
+        product_id: r.product_id,
+        customer_name: r.customer_name ?? null,
+        variant_title: r.variant_title ?? null,
+        rating: r.rating,
+        title: r.title ?? null,
+        body: r.body,
+        status: r.status,
+        created_at: r.created_at,
+      })
+  })()
 }
 
 // Order #1001: delivered six days after it was placed, so the account pages
