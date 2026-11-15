@@ -1,6 +1,6 @@
 "use server"
 
-import { EVENT_DETAILS } from "@lib/mock/catalog"
+import { storeApi } from "./api"
 
 export type EventDetail = {
   id: string
@@ -22,5 +22,7 @@ export type EventDetail = {
 export async function getProductEventDetail(
   productId: string
 ): Promise<EventDetail | null> {
-  return EVENT_DETAILS[productId] ?? null
+  return storeApi<{ event: EventDetail | null }>(`/products/${productId}/event`)
+    .then((r) => r.event)
+    .catch(() => null)
 }

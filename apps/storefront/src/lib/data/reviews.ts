@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { mockReviews } from "@lib/mock/db"
-import { getCustomerId } from "./cookies"
+import { storeApi } from "./api"
+import { getAuthToken } from "./cookies"
 
 export type Review = {
   id: string
@@ -32,11 +32,14 @@ export type ListReviewsResult = {
 export async function listProductReviews(
   productId: string
 ): Promise<ListReviewsResult> {
-  return mockReviews.list(productId)
+  return storeApi<ListReviewsResult>(`/products/${productId}/reviews`).catch(() => ({
+    reviews: [],
+    summary: { count: 0, average_rating: 0 },
+  }))
 }
 
 // Each image is either an already-hosted URL, or a fresh upload encoded as
-// base64 with its MIME type. Uploads are kept inline as data URLs.
+// base64 with its MIME type. Uploads are stored inline as data URLs.
 export type ReviewImageInput =
   | { url: string }
   | { data: string; mime: string; name?: string }
@@ -58,22 +61,26 @@ export type CreateReviewResult =
 export async function createProductReview(
   input: CreateReviewInput
 ): Promise<CreateReviewResult> {
-  const customerId = await getCustomerId()
-  if (!customerId) {
+  if (!(await getAuthToken())) {
     return { ok: false, error: "Sign in to leave a review.", needsAuth: true }
   }
 
   try {
-    const review = mockReviews.create(customerId, {
-      product_id: input.product_id,
-      variant_id: input.variant_id,
-      rating: input.rating,
-      title: input.title,
-      body: input.body,
-      images: (input.images ?? []).map((img) =>
-        "url" in img ? img.url : `data:${img.mime};base64,${img.data}`
-      ),
-    })
+    const { review } = await storeApi<{ review: Review }>(
+      `/products/${input.product_id}/reviews`,
+      {
+        method: "POST",
+        body: {
+          variant_id: input.variant_id,
+          rating: input.rating,
+          title: input.title,
+          body: input.body,
+          images: (input.images ?? []).map((img) =>
+            "url" in img ? img.url : `data:${img.mime};base64,${img.data}`
+          ),
+        },
+      }
+    )
     if (input.productHandle) {
       revalidatePath(`/[countryCode]/(main)/products/${input.productHandle}`, "page")
     }

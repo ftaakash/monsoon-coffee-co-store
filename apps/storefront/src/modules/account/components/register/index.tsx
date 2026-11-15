@@ -62,6 +62,7 @@ const Register = ({ setCurrentView }: Props) => {
             label="Password"
             name="password"
             required
+            minLength={8}
             type="password"
             autoComplete="new-password"
             data-testid="password-input"

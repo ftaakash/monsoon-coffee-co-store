@@ -1,21 +1,24 @@
 "use server"
 
 import { HttpTypes } from "@medusajs/types"
-import { mockOrders } from "@lib/mock/db"
-import { getCustomerId } from "./cookies"
+import { storeApi } from "./api"
 import { revalidateStorefront } from "./revalidate"
 
-export const retrieveOrder = async (id: string) => mockOrders.retrieve(id)
+type OrderResponse = { order: HttpTypes.StoreOrder }
+
+export const retrieveOrder = async (id: string) =>
+  (await storeApi<OrderResponse>(`/orders/${id}`)).order
 
 export const listOrders = async (
   limit: number = 10,
   offset: number = 0,
   _filters?: Record<string, unknown>
-) => {
-  const customerId = await getCustomerId()
-  if (!customerId) throw new Error("Unauthorized")
-  return mockOrders.listForCustomer(customerId, limit, offset)
-}
+) =>
+  (
+    await storeApi<{ orders: HttpTypes.StoreOrder[] }>("/customers/me/orders", {
+      query: { limit, offset },
+    })
+  ).orders
 
 export const createTransferRequest = async (
   state: {
@@ -36,7 +39,8 @@ export const createTransferRequest = async (
   }
 
   try {
-    return { success: true, error: null, order: mockOrders.requestTransfer(id) }
+    const { order } = await storeApi<OrderResponse>(`/orders/${id}/transfer`, { method: "POST" })
+    return { success: true, error: null, order }
   } catch (err) {
     return { success: false, error: (err as Error).message, order: null }
   }
@@ -44,7 +48,7 @@ export const createTransferRequest = async (
 
 export const acceptTransferRequest = async (id: string, _token: string) => {
   try {
-    const order = mockOrders.acceptTransfer(id, await getCustomerId())
+    const { order } = await storeApi<OrderResponse>(`/orders/${id}/transfer/accept`, { method: "POST" })
     revalidateStorefront()
     return { success: true, error: null, order }
   } catch (err) {
@@ -56,7 +60,7 @@ export const cancelOrder = async (
   id: string
 ): Promise<{ success: boolean; error: string | null }> => {
   try {
-    mockOrders.cancel(id, await getCustomerId())
+    await storeApi(`/orders/${id}/cancel`, { method: "POST" })
     revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
@@ -72,7 +76,7 @@ export const requestOrderRefund = async (
   note?: string
 ): Promise<{ success: boolean; error: string | null }> => {
   try {
-    mockOrders.requestRefund(id, await getCustomerId(), note)
+    await storeApi(`/orders/${id}/refund-request`, { method: "POST", body: { note } })
     revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
@@ -85,7 +89,8 @@ export const requestOrderRefund = async (
 
 export const declineTransferRequest = async (id: string, _token: string) => {
   try {
-    return { success: true, error: null, order: mockOrders.declineTransfer(id) }
+    const { order } = await storeApi<OrderResponse>(`/orders/${id}/transfer/decline`, { method: "POST" })
+    return { success: true, error: null, order }
   } catch (err) {
     return { success: false, error: (err as Error).message, order: null }
   }

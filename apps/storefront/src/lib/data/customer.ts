@@ -2,26 +2,35 @@
 
 import { HttpTypes } from "@medusajs/types"
 import { redirect } from "next/navigation"
-import { mockAuth, mockCart, mockCustomers } from "@lib/mock/db"
+import { storeApi } from "./api"
 import {
   getAuthToken,
   getCartId,
-  getCustomerId,
   removeAuthToken,
   removeCartId,
   setAuthToken,
 } from "./cookies"
 import { revalidateStorefront } from "./revalidate"
 
+type CustomerResponse = { customer: HttpTypes.StoreCustomer }
+
 export const retrieveCustomer =
-  async (): Promise<HttpTypes.StoreCustomer | null> =>
-    mockCustomers.retrieve(await getCustomerId())
+  async (): Promise<HttpTypes.StoreCustomer | null> => {
+    // Guests have no session token, so there's nothing to ask the API.
+    if (!(await getAuthToken())) return null
+    return storeApi<CustomerResponse>("/customers/me")
+      .then((r) => r.customer)
+      .catch(() => null)
+  }
 
 export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
-  const customer = mockCustomers.update(await getCustomerId(), {
-    first_name: body.first_name ?? undefined,
-    last_name: body.last_name ?? undefined,
-    phone: body.phone ?? undefined,
+  const { customer } = await storeApi<CustomerResponse>("/customers/me", {
+    method: "POST",
+    body: {
+      first_name: body.first_name ?? undefined,
+      last_name: body.last_name ?? undefined,
+      phone: body.phone ?? undefined,
+    },
   })
   revalidateStorefront()
   return customer
@@ -37,11 +46,14 @@ export async function signup(_currentState: unknown, formData: FormData) {
   }
 
   try {
-    const token = mockAuth.register({ ...customerForm, password })
+    const { token, customer } = await storeApi<{
+      token: string
+      customer: HttpTypes.StoreCustomer
+    }>("/auth/register", { method: "POST", body: { ...customerForm, password } })
     await setAuthToken(token)
     await transferCart()
 
-    return mockCustomers.retrieve(mockAuth.customerIdForToken(token))
+    return customer
   } catch (error) {
     return String(error)
   }
@@ -52,7 +64,11 @@ export async function login(_currentState: unknown, formData: FormData) {
   const password = formData.get("password") as string
 
   try {
-    await setAuthToken(mockAuth.login(email, password))
+    const { token } = await storeApi<{ token: string }>("/auth/login", {
+      method: "POST",
+      body: { email, password },
+    })
+    await setAuthToken(token)
   } catch (error) {
     return String(error)
   }
@@ -65,7 +81,8 @@ export async function login(_currentState: unknown, formData: FormData) {
 }
 
 export async function signout(countryCode: string) {
-  mockAuth.logout(await getAuthToken())
+  // Ends the session on the server too, so the old token stops working.
+  await storeApi("/auth/session", { method: "DELETE" }).catch(() => {})
 
   await removeAuthToken()
   await removeCartId()
@@ -76,10 +93,9 @@ export async function signout(countryCode: string) {
 
 export async function transferCart() {
   const cartId = await getCartId()
-  const customerId = await getCustomerId()
 
-  if (cartId && customerId) {
-    mockCart.transfer(cartId, customerId)
+  if (cartId && (await getAuthToken())) {
+    await storeApi(`/carts/${cartId}/customer`, { method: "POST" })
   }
   revalidateStorefront()
 }
@@ -115,7 +131,7 @@ export const addCustomerAddress = async (
   }
 
   try {
-    mockCustomers.addAddress(await getCustomerId(), address)
+    await storeApi("/customers/me/addresses", { method: "POST", body: address })
     revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {
@@ -127,7 +143,7 @@ export const deleteCustomerAddress = async (
   addressId: string
 ): Promise<void> => {
   try {
-    mockCustomers.deleteAddress(await getCustomerId(), addressId)
+    await storeApi(`/customers/me/addresses/${addressId}`, { method: "DELETE" })
     revalidateStorefront()
   } catch {
     // Already gone, or signed out — nothing to delete.
@@ -164,8 +180,7 @@ const sameAddress = (
 export const upsertDefaultShippingAddress = async (
   payload: DefaultShippingPayload
 ): Promise<{ success: boolean; error: string | null }> => {
-  const customerId = await getCustomerId()
-  const customer = mockCustomers.retrieve(customerId)
+  const customer = await retrieveCustomer()
   if (!customer) {
     return { success: false, error: "Not authenticated" }
   }
@@ -175,21 +190,25 @@ export const upsertDefaultShippingAddress = async (
 
     if (existing) {
       if (!existing.is_default_shipping) {
-        mockCustomers.updateAddress(customerId, existing.id, {
-          is_default_shipping: true,
+        await storeApi(`/customers/me/addresses/${existing.id}`, {
+          method: "POST",
+          body: { is_default_shipping: true },
         })
       }
     } else {
-      mockCustomers.addAddress(customerId, {
-        ...payload,
-        address_2: payload.address_2 || "",
-        province: payload.province || "",
-        phone: payload.phone || "",
-        company: payload.company || "",
-        is_default_shipping: true,
-        is_default_billing: !customer.addresses?.some(
-          (a) => a.is_default_billing
-        ),
+      await storeApi("/customers/me/addresses", {
+        method: "POST",
+        body: {
+          ...payload,
+          address_2: payload.address_2 || "",
+          province: payload.province || "",
+          phone: payload.phone || "",
+          company: payload.company || "",
+          is_default_shipping: true,
+          is_default_billing: !customer.addresses?.some(
+            (a) => a.is_default_billing
+          ),
+        },
       })
     }
 
@@ -244,7 +263,7 @@ export const updateCustomerAddress = async (
   }
 
   try {
-    mockCustomers.updateAddress(await getCustomerId(), addressId, address)
+    await storeApi(`/customers/me/addresses/${addressId}`, { method: "POST", body: address })
     revalidateStorefront()
     return { success: true, error: null }
   } catch (err) {

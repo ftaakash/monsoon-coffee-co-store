@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 // Country codes with a storefront region. Keep in sync with REGIONS in
-// src/lib/mock/catalog.ts (middleware runs on the edge and can't import it).
+// src/server/services/catalog.ts (middleware runs on the edge and
+// can't use the database).
 const COUNTRY_CODES = ["in"]
 const DEFAULT_REGION = process.env.NEXT_PUBLIC_DEFAULT_REGION || "in"
 
@@ -40,6 +41,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|images|assets|png|svg|jpg|jpeg|gif|webp).*)",
+    "/((?!api|admin|_next/static|_next/image|favicon.ico|images|assets|png|svg|jpg|jpeg|gif|webp).*)",
   ],
 }

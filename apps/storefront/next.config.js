@@ -8,6 +8,8 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   productionBrowserSourceMaps: false,
+  // Native SQLite driver: load it from node_modules at runtime, don't bundle it.
+  serverExternalPackages: ["better-sqlite3"],
   eslint: {
     ignoreDuringBuilds: true,
   },

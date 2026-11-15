@@ -1,18 +1,12 @@
-import "server-only"
-
-import { HttpTypes } from "@medusajs/types"
-
 import type { BrewMethod, BrewRecipe } from "@lib/data/brews"
 import type { CoffeeProfile } from "@lib/data/coffee-profiles"
 import type { EventDetail } from "@lib/data/event-details"
-import type { StoreFilterCategory } from "@lib/data/filter-categories"
 import type { Review } from "@lib/data/reviews"
 
-// Static catalogue for the frontend-only build. Everything the storefront used
-// to read from the Medusa backend (regions, products, categories, brews, …)
-// lives here, shaped like the Medusa Store API responses so the UI is unchanged.
+// Starting data for a fresh database. seed.ts inserts all of this the first
+// time the database file is created; after that the database is the source of
+// truth and the admin panel edits it.
 
-const CURRENCY = "inr"
 const IMG = {
   product: "/monsoon/images/Product.png",
   bags: "/monsoon/images/coffeebags.png",
@@ -21,47 +15,26 @@ const IMG = {
   about3: "/monsoon/images/about3.png",
 }
 
-// ── Regions ────────────────────────────────────────────────────────────────
-
-export const REGIONS = [
-  {
-    id: "reg_india",
-    name: "India",
-    currency_code: CURRENCY,
-    automatic_taxes: true,
-    countries: [
-      {
-        id: "in",
-        iso_2: "in",
-        iso_3: "ind",
-        num_code: "356",
-        name: "INDIA",
-        display_name: "India",
-        region_id: "reg_india",
-      },
-    ],
-    payment_providers: [{ id: "pp_razorpay_razorpay", is_enabled: true }],
-  },
-] as unknown as HttpTypes.StoreRegion[]
-
 // ── Categories, collections, filter tags ──────────────────────────────────
 
-const category = (id: string, name: string, handle: string, rank: number) => ({
+const category = (
+  id: string,
+  name: string,
+  handle: string,
+  rank: number,
+  showBrewLab = false
+) => ({
   id,
   name,
   handle,
   rank,
-  description: "",
-  parent_category: null,
-  parent_category_id: null,
-  category_children: [],
-  created_at: "2025-01-01T00:00:00.000Z",
-  updated_at: "2025-01-01T00:00:00.000Z",
+  // Products in these categories show the Brew Lab section.
+  show_brew_lab: showBrewLab,
 })
 
 export const CATEGORIES = [
-  category("pcat_beans", "Coffee Beans", "coffee-beans", 0),
-  category("pcat_ground", "Ground Coffee", "ground-coffee", 1),
+  category("pcat_beans", "Coffee Beans", "coffee-beans", 0, true),
+  category("pcat_ground", "Ground Coffee", "ground-coffee", 1, true),
   category("pcat_gear", "Brew Gear", "brew-gear", 2),
   category("pcat_merch", "Merch", "merch", 3),
   category("pcat_events", "Events", "events", 4),
@@ -71,9 +44,6 @@ const collection = (id: string, title: string, handle: string) => ({
   id,
   title,
   handle,
-  metadata: null,
-  created_at: "2025-01-01T00:00:00.000Z",
-  updated_at: "2025-01-01T00:00:00.000Z",
 })
 
 export const COLLECTIONS = [
@@ -98,7 +68,7 @@ export const TAGS = {
   dark: tag("ptag_dark", "Dark Roast"),
 }
 
-export const FILTER_CATEGORIES: StoreFilterCategory[] = [
+export const FILTER_CATEGORIES = [
   {
     id: "fcat_origin",
     name: "Origin",
@@ -124,7 +94,7 @@ export const FILTER_CATEGORIES: StoreFilterCategory[] = [
 
 // ── Products ───────────────────────────────────────────────────────────────
 
-type VariantSeed = {
+export type VariantSeed = {
   title: string
   // option title → value, e.g. { Size: "250g" }
   options: Record<string, string>
@@ -134,7 +104,7 @@ type VariantSeed = {
   stock?: number
 }
 
-type ProductSeed = {
+export type ProductSeed = {
   id: string
   handle: string
   title: string
@@ -149,90 +119,6 @@ type ProductSeed = {
   variants: VariantSeed[]
 }
 
-const buildProduct = (seed: ProductSeed): HttpTypes.StoreProduct => {
-  const optionTitles = Object.keys(seed.variants[0].options)
-  const options = optionTitles.map((title, i) => {
-    const optionId = `${seed.id}_opt_${i}`
-    const values = Array.from(
-      new Set(seed.variants.map((v) => v.options[title]))
-    ).map((value, j) => ({
-      id: `${optionId}_val_${j}`,
-      value,
-      option_id: optionId,
-    }))
-    return { id: optionId, title, product_id: seed.id, values }
-  })
-
-  const images = seed.images.map((url, i) => ({
-    id: `${seed.id}_img_${i}`,
-    url,
-    rank: i,
-  }))
-
-  const variants = seed.variants.map((v, i) => {
-    const variantId = `${seed.id}_var_${i}`
-    const onSale = v.originalPrice !== undefined && v.originalPrice > v.price
-    return {
-      id: variantId,
-      title: v.title,
-      sku: `${seed.handle}-${i}`.toUpperCase(),
-      product_id: seed.id,
-      manage_inventory: v.stock !== undefined,
-      allow_backorder: false,
-      inventory_quantity: v.stock ?? null,
-      images,
-      options: options.map((option) => {
-        const value = option.values.find(
-          (val) => val.value === v.options[option.title]
-        )!
-        return {
-          id: value.id,
-          value: value.value,
-          option_id: option.id,
-          option: { id: option.id, title: option.title },
-        }
-      }),
-      calculated_price: {
-        id: `${variantId}_price`,
-        calculated_amount: v.price,
-        original_amount: v.originalPrice ?? v.price,
-        currency_code: CURRENCY,
-        calculated_price: { price_list_type: onSale ? "sale" : null },
-        original_price: { price_list_type: null },
-      },
-    }
-  })
-
-  const categories = CATEGORIES.filter((c) => seed.categoryIds.includes(c.id))
-  const productCollection =
-    COLLECTIONS.find((c) => c.id === seed.collectionId) ?? null
-
-  return {
-    id: seed.id,
-    handle: seed.handle,
-    title: seed.title,
-    subtitle: seed.subtitle ?? null,
-    description: seed.description,
-    thumbnail: seed.images[0] ?? null,
-    images,
-    options,
-    variants,
-    tags: seed.tags,
-    categories,
-    collection: productCollection,
-    collection_id: productCollection?.id ?? null,
-    is_giftcard: false,
-    discountable: true,
-    status: "published",
-    metadata: {},
-    shipping_profile: {
-      id: seed.shippingProfile === "digital" ? "sp_digital" : "sp_physical",
-    },
-    created_at: seed.createdAt,
-    updated_at: seed.createdAt,
-  } as unknown as HttpTypes.StoreProduct
-}
-
 const coffeeSizes = (prices: [number, number, number], stock?: number[]) =>
   (["250g", "500g", "1kg"] as const).map((size, i) => ({
     title: size,
@@ -241,7 +127,7 @@ const coffeeSizes = (prices: [number, number, number], stock?: number[]) =>
     stock: stock?.[i],
   }))
 
-const PRODUCT_SEEDS: ProductSeed[] = [
+export const PRODUCT_SEEDS: ProductSeed[] = [
   {
     id: "prod_malabar",
     handle: "monsooned-malabar-aa",
@@ -396,8 +282,6 @@ const PRODUCT_SEEDS: ProductSeed[] = [
   },
 ]
 
-export const PRODUCTS: HttpTypes.StoreProduct[] = PRODUCT_SEEDS.map(buildProduct)
-
 // ── Product extras (coffee profile, brew recipes, events, reviews) ─────────
 
 export const COFFEE_PROFILES: Record<string, CoffeeProfile> = {
@@ -471,7 +355,7 @@ export const COFFEE_PROFILES: Record<string, CoffeeProfile> = {
   },
 }
 
-const BREW_METHODS: Record<string, BrewMethod> = {
+export const BREW_METHODS: Record<string, BrewMethod> = {
   pourover: {
     id: "bm_pourover",
     slug: "pour-over",
@@ -549,9 +433,6 @@ export const BREWS: Record<string, BrewRecipe[]> = Object.fromEntries(
   )
 )
 
-// Categories whose products show the Brew Lab section.
-export const BREW_LAB_CATEGORY_IDS = ["pcat_beans", "pcat_ground"]
-
 export const EVENT_DETAILS: Record<string, EventDetail> = {
   prod_cupping: {
     id: "ev_cupping",
@@ -614,47 +495,43 @@ export const SEED_REVIEWS: Review[] = [
 // ── Checkout options ───────────────────────────────────────────────────────
 
 export const SHIPPING_OPTIONS = [
-  {
-    id: "so_standard",
-    name: "Standard Delivery",
-    price_type: "flat",
-    amount: 0,
-    shipping_profile_id: "sp_physical",
-    service_zone_id: "serzo_india",
-    provider_id: "manual_manual",
-    data: { description: "3–5 business days" },
-    type: { label: "Standard", description: "3–5 business days", code: "standard" },
-  },
-  {
-    id: "so_express",
-    name: "Express Delivery",
-    price_type: "flat",
-    amount: 149,
-    shipping_profile_id: "sp_physical",
-    service_zone_id: "serzo_india",
-    provider_id: "manual_manual",
-    data: { description: "1–2 business days" },
-    type: { label: "Express", description: "1–2 business days", code: "express" },
-  },
-  {
-    id: "so_digital",
-    name: "Digital Delivery",
-    price_type: "flat",
-    amount: 0,
-    shipping_profile_id: "sp_digital",
-    service_zone_id: "serzo_india",
-    provider_id: "manual_manual",
-    data: { description: "Tickets are emailed instantly" },
-    type: { label: "Digital", description: "Emailed instantly", code: "digital" },
-  },
-] as unknown as HttpTypes.StoreCartShippingOption[]
+  { id: "so_standard", name: "Standard Delivery", code: "standard", amount: 0, shipping_profile: "physical", description: "3–5 business days" },
+  { id: "so_express", name: "Express Delivery", code: "express", amount: 149, shipping_profile: "physical", description: "1–2 business days" },
+  { id: "so_digital", name: "Digital Delivery", code: "digital", amount: 0, shipping_profile: "digital", description: "Tickets are emailed instantly" },
+]
 
-export const PAYMENT_PROVIDERS = [
-  { id: "pp_razorpay_razorpay", is_enabled: true },
-] as unknown as HttpTypes.StorePaymentProvider[]
+// Percentage discounts accepted at checkout.
+export const PROMO_CODES = [
+  { code: "MONSOON10", percent: 10 },
+  { code: "FIRSTBREW", percent: 15 },
+]
 
-// Demo promo codes accepted at checkout. Percentage discounts only.
-export const PROMO_CODES: Record<string, number> = {
-  MONSOON10: 10,
-  FIRSTBREW: 15,
+export const DEMO_CUSTOMER = {
+  id: "cus_demo",
+  email: "demo@monsoon.test",
+  password: "monsoon123",
+  first_name: "Asha",
+  last_name: "Menon",
+  phone: "9876543210",
+  created_at: "2025-01-15T10:00:00.000Z",
+  address: {
+    id: "addr_demo",
+    first_name: "Asha",
+    last_name: "Menon",
+    company: "",
+    address_1: "12, 4th Cross, Indiranagar",
+    address_2: "",
+    city: "Bengaluru",
+    province: "Karnataka",
+    postal_code: "560038",
+    country_code: "in",
+    phone: "9876543210",
+  },
+}
+
+export const DEMO_ADMIN = {
+  id: "adm_demo",
+  email: "admin@monsoon.test",
+  password: "admin12345",
+  name: "Roastery Admin",
 }

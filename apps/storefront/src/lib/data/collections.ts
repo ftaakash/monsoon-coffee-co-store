@@ -1,19 +1,15 @@
 "use server"
 
 import { HttpTypes } from "@medusajs/types"
-import { COLLECTIONS } from "@lib/mock/catalog"
-import { listAllProducts } from "@lib/mock/db"
+import { storeApi } from "./api"
 
-const withProducts = (collection: (typeof COLLECTIONS)[number]) =>
-  ({
-    ...collection,
-    products: listAllProducts().filter((p) => p.collection_id === collection.id),
-  }) as unknown as HttpTypes.StoreCollection
+const fetchCollections = async () =>
+  (await storeApi<{ collections: HttpTypes.StoreCollection[] }>("/collections")).collections
 
 export const retrieveCollection = async (id: string) => {
-  const collection = COLLECTIONS.find((c) => c.id === id)
+  const collection = (await fetchCollections()).find((c) => c.id === id)
   if (!collection) throw new Error(`Collection with id ${id} not found`)
-  return withProducts(collection)
+  return collection
 }
 
 export const listCollections = async (
@@ -21,13 +17,11 @@ export const listCollections = async (
 ): Promise<{ collections: HttpTypes.StoreCollection[]; count: number }> => {
   const limit = Number(queryParams.limit || 100)
   const offset = Number(queryParams.offset || 0)
-  const collections = COLLECTIONS.slice(offset, offset + limit).map(withProducts)
+  const collections = (await fetchCollections()).slice(offset, offset + limit)
   return { collections, count: collections.length }
 }
 
 export const getCollectionByHandle = async (
   handle: string
-): Promise<HttpTypes.StoreCollection | null> => {
-  const collection = COLLECTIONS.find((c) => c.handle === handle)
-  return collection ? withProducts(collection) : null
-}
+): Promise<HttpTypes.StoreCollection | null> =>
+  (await fetchCollections()).find((c) => c.handle === handle) ?? null

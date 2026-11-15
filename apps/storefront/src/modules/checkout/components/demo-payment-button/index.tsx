@@ -17,7 +17,7 @@ type Props = {
   disabled?: boolean
 }
 
-// Stands in for the Razorpay checkout window in the frontend-only build: it
+// Stands in for a payment gateway checkout window (none is connected): it
 // re-checks stock, pretends to take payment, then completes the order.
 export default function DemoPaymentButton({
   cart,

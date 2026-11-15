@@ -1,6 +1,6 @@
 "use server"
 
-import { mockAuth } from "@lib/mock/db"
+import { storeApi } from "./api"
 import { setAuthToken } from "./cookies"
 import { transferCart } from "./customer"
 
@@ -11,14 +11,18 @@ export type SendLoginOtpResult = {
 }
 export type VerifyLoginOtpResult = { ok: boolean; error?: string }
 
-// "Email" a login code to an existing account. In this demo build no email is
-// sent — the code is always DEMO_OTP (123456).
+// "Email" a login code to an existing account. There is no email service in
+// this project, so the code is always 123456 (see services/customers.ts).
 export async function sendLoginOtp(email: string): Promise<SendLoginOtpResult> {
   const trimmed = (email ?? "").trim()
   if (!trimmed) return { ok: false, error: "Enter your email." }
 
   try {
-    return { ok: true, emailMasked: mockAuth.sendOtp(trimmed) }
+    const { email_masked } = await storeApi<{ email_masked: string }>("/auth/code", {
+      method: "POST",
+      body: { email: trimmed },
+    })
+    return { ok: true, emailMasked: email_masked }
   } catch (e: any) {
     return {
       ok: false,
@@ -36,7 +40,11 @@ export async function verifyLoginOtp(
   const trimmed = (email ?? "").trim()
 
   try {
-    await setAuthToken(mockAuth.verifyOtp(trimmed, code))
+    const { token } = await storeApi<{ token: string }>("/auth/code/verify", {
+      method: "POST",
+      body: { email: trimmed, code },
+    })
+    await setAuthToken(token)
 
     try {
       await transferCart()
