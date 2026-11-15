@@ -1,14 +1,11 @@
 "use server"
 
 import { HttpTypes } from "@medusajs/types"
-import { listAllProducts } from "@lib/mock/db"
+import { storeApi } from "./api"
 
 export const retrieveVariant = async (
   variant_id: string
-): Promise<HttpTypes.StoreProductVariant | null> => {
-  for (const product of listAllProducts()) {
-    const variant = product.variants?.find((v) => v.id === variant_id)
-    if (variant) return variant
-  }
-  return null
-}
+): Promise<HttpTypes.StoreProductVariant | null> =>
+  storeApi<{ variant: HttpTypes.StoreProductVariant }>(`/variants/${variant_id}`)
+    .then((r) => r.variant)
+    .catch(() => null)

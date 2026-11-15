@@ -1,8 +1,6 @@
 import "server-only"
 import { cookies as nextCookies } from "next/headers"
 
-import { mockAuth } from "@lib/mock/db"
-
 export const getAuthToken = async (): Promise<string | null> => {
   try {
     const cookies = await nextCookies()
@@ -11,10 +9,6 @@ export const getAuthToken = async (): Promise<string | null> => {
     return null
   }
 }
-
-// The signed-in customer's id, resolved from the session cookie.
-export const getCustomerId = async (): Promise<string | null> =>
-  mockAuth.customerIdForToken(await getAuthToken())
 
 export const getCacheTag = async (tag: string): Promise<string> => {
   try {

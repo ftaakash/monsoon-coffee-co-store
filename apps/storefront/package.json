@@ -2,7 +2,7 @@
   "name": "@dtc/storefront",
   "version": "1.0.3",
   "private": true,
-  "description": "Monsoon Coffee Co. storefront (frontend-only, runs on local mock data)",
+  "description": "Monsoon Coffee Co. storefront, admin panel and SQLite-backed API (Next.js)",
   "keywords": [
     "storefront",
     "nextjs"
@@ -11,13 +11,15 @@
     "dev": "next dev --turbopack -p 8000",
     "build": "next build",
     "start": "next start -p 8000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:reset": "node -e \"require('fs').rmSync('data',{recursive:true,force:true});console.log('Database deleted. It is recreated with the seed data on the next start.')\""
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
     "@medusajs/icons": "2.15.2",
     "@medusajs/ui-preset": "2.15.2",
     "@radix-ui/react-accordion": "^1.2.3",
+    "better-sqlite3": "12.4.1",
     "clsx": "^2.1.1",
     "lodash": "^4.17.21",
     "marked": "^4.3.0",
@@ -33,6 +35,7 @@
   "devDependencies": {
     "@medusajs/types": "2.15.2",
     "@next/bundle-analyzer": "^15.5.18",
+    "@types/better-sqlite3": "7.6.13",
     "@types/lodash": "^4.14.195",
     "@types/node": "17.0.21",
     "@types/qrcode": "^1.5.6",

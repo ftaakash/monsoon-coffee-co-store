@@ -1,19 +1,18 @@
 "use server"
 
 import { HttpTypes } from "@medusajs/types"
-import { REGIONS } from "@lib/mock/catalog"
+import { storeApi } from "./api"
 
-export const listRegions = async (): Promise<HttpTypes.StoreRegion[]> => REGIONS
+export const listRegions = async (): Promise<HttpTypes.StoreRegion[]> =>
+  (await storeApi<{ regions: HttpTypes.StoreRegion[] }>("/regions")).regions
 
 export const retrieveRegion = async (id: string) => {
-  const region = REGIONS.find((r) => r.id === id)
+  const region = (await listRegions()).find((r) => r.id === id)
   if (!region) throw new Error(`Region with id ${id} not found`)
   return region
 }
 
 export const getRegion = async (countryCode: string) => {
   const code = (countryCode || "in").toLowerCase()
-  return (
-    REGIONS.find((r) => r.countries?.some((c) => c.iso_2 === code)) ?? null
-  )
+  return (await listRegions()).find((r) => r.countries?.some((c) => c.iso_2 === code)) ?? null
 }

@@ -1,6 +1,6 @@
 "use server"
 
-import { BREWS, BREW_LAB_CATEGORY_IDS } from "@lib/mock/catalog"
+import { storeApi } from "./api"
 
 export type BrewParamSchemaItem = {
   key: string
@@ -36,17 +36,19 @@ export type BrewRecipe = {
 }
 
 export async function listProductBrews(productId: string): Promise<BrewRecipe[]> {
-  return BREWS[productId] ?? []
+  return storeApi<{ brews: BrewRecipe[] }>(`/products/${productId}/brews`)
+    .then((r) => r.brews)
+    .catch(() => [])
 }
 
 /**
  * Whether the brew lab section should render for a product: true when it sits
- * in one of the coffee categories.
+ * in a category flagged show_brew_lab (Coffee Beans, Ground Coffee).
  */
 export async function isBrewLabEnabledForProduct(product: {
-  categories?: Array<{ id?: string | null; handle?: string | null }> | null
+  categories?: Array<{ id?: string | null; show_brew_lab?: boolean | null }> | null
 }): Promise<boolean> {
   return (product.categories ?? []).some(
-    (c) => !!c?.id && BREW_LAB_CATEGORY_IDS.includes(c.id)
+    (c) => !!c?.show_brew_lab
   )
 }

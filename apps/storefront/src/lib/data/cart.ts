@@ -2,11 +2,12 @@
 
 import { HttpTypes } from "@medusajs/types"
 import { redirect } from "next/navigation"
-import { SHIPPING_OPTIONS } from "@lib/mock/catalog"
-import { mockCart } from "@lib/mock/db"
-import { getCartId, getCustomerId, removeCartId, setCartId } from "./cookies"
+import { storeApi } from "./api"
+import { getCartId, removeCartId, setCartId } from "./cookies"
 import { getRegion } from "./regions"
 import { revalidateStorefront } from "./revalidate"
+
+type CartResponse = { cart: HttpTypes.StoreCart }
 
 /**
  * Retrieves a cart by its ID. If no ID is provided, it will use the cart ID from the cookies.
@@ -24,7 +25,9 @@ export async function retrieveCart(
     return null
   }
 
-  return mockCart.retrieve(id)
+  return storeApi<CartResponse>(`/carts/${id}`)
+    .then((r) => r.cart)
+    .catch(() => null)
 }
 
 export async function getOrSetCart(countryCode: string) {
@@ -43,13 +46,13 @@ export async function getOrSetCart(countryCode: string) {
   }
 
   if (!cart) {
-    cart = mockCart.create(region.id, await getCustomerId())
+    cart = (await storeApi<CartResponse>("/carts", { method: "POST", body: { region_id: region.id } })).cart
     await setCartId(cart.id)
     revalidateStorefront()
   }
 
   if (cart.region_id !== region.id) {
-    cart = mockCart.update(cart.id, { region_id: region.id })
+    cart = await updateCart({ region_id: region.id })
   }
 
   return cart
@@ -62,10 +65,7 @@ export async function updateCart(data: HttpTypes.StoreUpdateCart) {
     throw new Error("No existing cart found, please create one before updating")
   }
 
-  const cart = mockCart.update(
-    cartId,
-    data as Parameters<typeof mockCart.update>[1]
-  )
+  const { cart } = await storeApi<CartResponse>(`/carts/${cartId}`, { method: "POST", body: data })
   revalidateStorefront()
   return cart
 }
@@ -89,7 +89,10 @@ export async function addToCart({
     throw new Error("Error retrieving or creating cart")
   }
 
-  mockCart.addItem(cart.id, variantId, quantity)
+  await storeApi(`/carts/${cart.id}/line-items`, {
+    method: "POST",
+    body: { variant_id: variantId, quantity },
+  })
   revalidateStorefront()
 }
 
@@ -153,7 +156,7 @@ export async function updateLineItem({
     throw new Error("Missing cart ID when updating line item")
   }
 
-  mockCart.updateItem(cartId, lineId, quantity)
+  await storeApi(`/carts/${cartId}/line-items/${lineId}`, { method: "POST", body: { quantity } })
   revalidateStorefront()
 }
 
@@ -168,7 +171,7 @@ export async function deleteLineItem(lineId: string) {
     throw new Error("Missing cart ID when deleting line item")
   }
 
-  mockCart.deleteItem(cartId, lineId)
+  await storeApi(`/carts/${cartId}/line-items/${lineId}`, { method: "DELETE" })
   revalidateStorefront()
 }
 
@@ -181,16 +184,18 @@ export async function setShippingMethod({
   cartId: string
   shippingMethodId: string
 }) {
-  const cart = mockCart.retrieve(cartId)
+  const [cart, { shipping_options }] = await Promise.all([
+    retrieveCart(cartId),
+    listCartOptions(),
+  ])
   const profileOf = (id?: string | null) =>
-    SHIPPING_OPTIONS.find((o) => o.id === id)?.shipping_profile_id
+    shipping_options.find((o) => o.id === id)?.shipping_profile_id
   const profile = profileOf(shippingMethodId)
   const kept = (cart?.shipping_methods ?? [])
     .map((m) => m.shipping_option_id)
     .filter((id): id is string => !!id && profileOf(id) !== profile)
 
-  mockCart.setShippingMethods(cartId, [...kept, shippingMethodId])
-  revalidateStorefront()
+  await setShippingMethods({ cartId, optionIds: [...kept, shippingMethodId] })
 }
 
 // Set ALL of a cart's shipping methods at once — one per shipping profile.
@@ -201,7 +206,10 @@ export async function setShippingMethods({
   cartId: string
   optionIds: string[]
 }) {
-  mockCart.setShippingMethods(cartId, optionIds)
+  await storeApi(`/carts/${cartId}/shipping-methods`, {
+    method: "POST",
+    body: { option_ids: optionIds },
+  })
   revalidateStorefront()
 }
 
@@ -209,7 +217,9 @@ export async function initiatePaymentSession(
   cart: HttpTypes.StoreCart,
   _data: HttpTypes.StoreInitializePaymentSession
 ) {
-  const updated = mockCart.initPaymentSession(cart.id)
+  const { cart: updated } = await storeApi<CartResponse>(`/carts/${cart.id}/payment-session`, {
+    method: "POST",
+  })
   revalidateStorefront()
   return { payment_collection: updated.payment_collection }
 }
@@ -221,7 +231,7 @@ export async function applyPromotions(codes: string[]) {
     throw new Error("No existing cart found")
   }
 
-  mockCart.update(cartId, { promo_codes: codes })
+  await storeApi(`/carts/${cartId}`, { method: "POST", body: { promo_codes: codes } })
   revalidateStorefront()
 }
 
@@ -294,7 +304,10 @@ export async function completeCart(cartId?: string) {
     throw new Error("No existing cart found when placing an order")
   }
 
-  const cartRes = mockCart.complete(id)
+  const cartRes = await storeApi<{ type: "order"; order: HttpTypes.StoreOrder }>(
+    `/carts/${id}/complete`,
+    { method: "POST" }
+  )
   await removeCartId()
   revalidateStorefront()
   return cartRes
@@ -329,5 +342,5 @@ export async function updateRegion(countryCode: string, currentPath: string) {
 }
 
 export async function listCartOptions() {
-  return { shipping_options: SHIPPING_OPTIONS }
+  return storeApi<{ shipping_options: HttpTypes.StoreCartShippingOption[] }>("/shipping-options")
 }

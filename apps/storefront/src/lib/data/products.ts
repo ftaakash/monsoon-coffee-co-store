@@ -3,7 +3,7 @@
 import { sortProducts } from "@lib/util/sort-products"
 import { HttpTypes } from "@medusajs/types"
 import { SortOptions } from "@modules/store/components/refinement-list/sort-products"
-import { listAllProducts } from "@lib/mock/db"
+import { storeApi } from "./api"
 import { getRegion, retrieveRegion } from "./regions"
 
 type ProductQuery = HttpTypes.FindParams &
@@ -13,40 +13,6 @@ type ProductQuery = HttpTypes.FindParams &
 
 const asArray = (v: unknown): string[] =>
   v === undefined || v === null ? [] : Array.isArray(v) ? v.map(String) : [String(v)]
-
-// Applies the subset of Medusa's /store/products filters the storefront uses.
-// Within one filter values are OR'd; across filters they are AND'd.
-function filterProducts(
-  products: HttpTypes.StoreProduct[],
-  query: ProductQuery = {}
-) {
-  const ids = asArray(query.id)
-  const handles = asArray(query.handle)
-  const categoryIds = asArray(query.category_id)
-  const collectionIds = asArray(query.collection_id)
-  const tagIds = asArray(query.tag_id)
-  const q = typeof query.q === "string" ? query.q.toLowerCase() : ""
-
-  return products.filter((p) => {
-    if (ids.length && !ids.includes(p.id)) return false
-    if (handles.length && !handles.includes(p.handle ?? "")) return false
-    if (
-      categoryIds.length &&
-      !p.categories?.some((c) => categoryIds.includes(c.id))
-    )
-      return false
-    if (collectionIds.length && !collectionIds.includes(p.collection_id ?? ""))
-      return false
-    if (tagIds.length && !p.tags?.some((t) => tagIds.includes(t.id)))
-      return false
-    if (
-      q &&
-      !`${p.title} ${p.description ?? ""}`.toLowerCase().includes(q)
-    )
-      return false
-    return true
-  })
-}
 
 export const listProducts = async ({
   pageParam = 1,
@@ -83,13 +49,22 @@ export const listProducts = async ({
     }
   }
 
-  // Newest first, matching the backend's default ordering.
-  const matching = sortProducts(
-    filterProducts(listAllProducts(), queryParams),
-    "created_at"
-  )
-  const count = matching.length
-  const products = matching.slice(offset, offset + limit)
+  // The API filters and returns products newest first.
+  const { products, count } = await storeApi<{
+    products: HttpTypes.StoreProduct[]
+    count: number
+  }>("/products", {
+    query: {
+      id: asArray(queryParams?.id),
+      handle: asArray(queryParams?.handle),
+      category_id: asArray(queryParams?.category_id),
+      collection_id: asArray(queryParams?.collection_id),
+      tag_id: asArray(queryParams?.tag_id),
+      q: typeof queryParams?.q === "string" ? queryParams.q : undefined,
+      limit,
+      offset,
+    },
+  })
   const nextPage = count > offset + limit ? pageParam + 1 : null
 
   return {

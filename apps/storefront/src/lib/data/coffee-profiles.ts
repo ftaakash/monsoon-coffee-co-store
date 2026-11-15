@@ -1,6 +1,6 @@
 "use server"
 
-import { COFFEE_PROFILES } from "@lib/mock/catalog"
+import { storeApi } from "./api"
 
 export type ExtractionPoint = {
   time_s: number
@@ -26,5 +26,7 @@ export type CoffeeProfile = {
 export async function getProductCoffeeProfile(
   productId: string
 ): Promise<CoffeeProfile | null> {
-  return COFFEE_PROFILES[productId] ?? null
+  return storeApi<{ coffee_profile: CoffeeProfile | null }>(`/products/${productId}/coffee-profile`)
+    .then((r) => r.coffee_profile)
+    .catch(() => null)
 }

@@ -1,6 +1,6 @@
 "use server"
 
-import { FILTER_CATEGORIES } from "@lib/mock/catalog"
+import { storeApi } from "./api"
 
 export type StoreFilterTag = {
   id: string
@@ -16,4 +16,5 @@ export type StoreFilterCategory = {
 }
 
 export const listFilterCategories = async (): Promise<StoreFilterCategory[]> =>
-  FILTER_CATEGORIES
+  (await storeApi<{ filter_categories: StoreFilterCategory[] }>("/filter-categories"))
+    .filter_categories

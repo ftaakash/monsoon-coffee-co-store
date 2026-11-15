@@ -1,7 +1,6 @@
 "use server"
 
-import { mockCustomers } from "@lib/mock/db"
-import { getCustomerId } from "./cookies"
+import { storeApi } from "./api"
 import { revalidateStorefront } from "./revalidate"
 
 export type SettingsResult = { ok: boolean; error?: string }
@@ -14,7 +13,7 @@ export async function updateAccountProfile(input: {
   phone?: string
 }): Promise<SettingsResult> {
   try {
-    mockCustomers.update(await getCustomerId(), input)
+    await storeApi("/customers/me", { method: "POST", body: input })
     revalidateStorefront()
     return { ok: true }
   } catch (e: any) {
@@ -26,15 +25,16 @@ export async function updateAccountProfile(input: {
 }
 
 // "Email" a verification code the customer must enter to set/change a
-// password. In this demo build the code is always DEMO_OTP (123456).
+// password. With no email service the code is always 123456.
 export async function sendPasswordOtp(): Promise<
   SettingsResult & { emailMasked?: string }
 > {
   try {
-    return {
-      ok: true,
-      emailMasked: mockCustomers.maskedEmail(await getCustomerId()),
-    }
+    const { email_masked } = await storeApi<{ email_masked: string }>(
+      "/customers/me/password/code",
+      { method: "POST" }
+    )
+    return { ok: true, emailMasked: email_masked }
   } catch (e: any) {
     return {
       ok: false,
@@ -49,7 +49,7 @@ export async function setAccountPassword(
   code: string
 ): Promise<SettingsResult> {
   try {
-    mockCustomers.setPassword(await getCustomerId(), password, code)
+    await storeApi("/customers/me/password", { method: "POST", body: { password, code } })
     revalidateStorefront()
     return { ok: true }
   } catch (e: any) {
@@ -63,7 +63,7 @@ export async function setAccountPassword(
 // Whether the account already has a password (for "Set" vs "Change" labelling).
 export async function getAccountPasswordStatus(): Promise<boolean> {
   try {
-    return mockCustomers.hasPassword(await getCustomerId())
+    return (await storeApi<{ has_password: boolean }>("/customers/me/password")).has_password
   } catch {
     return false
   }
